@@ -59,8 +59,8 @@ function Sidebar() {
       >
         {/* Logo */}
         <div className="p-6 border-b border-beige-200">
-          <h1 className="text-2xl font-semibold text-beige-900">Harmonie Salon</h1>
-          <p className="text-sm text-beige-600 mt-1">Gestion Salon de Beauté</p>
+          <h1 className="text-2xl font-semibold text-beige-900">Inventa</h1>
+          <p className="text-sm text-beige-600 mt-1">Gestion de stocks</p>
         </div>
 
         {/* Navigation */}

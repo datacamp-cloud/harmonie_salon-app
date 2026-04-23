@@ -36,8 +36,8 @@ function Login() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-semibold text-beige-900">WeBeauty</h1>
-          <p className="text-beige-600 mt-2">Gestion de Salon de Beauté</p>
+          <h1 className="text-3xl font-semibold text-beige-900">Inventa</h1>
+          <p className="text-beige-600 mt-2">Bienvenue sur Inventa, la solution de gestion de stocks</p>
         </div>
 
         {/* Login Card */}
