@@ -3,14 +3,20 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Products from './pages/Products'
+import Inventory from './pages/Inventory'
 import Arrivages from './pages/Arrivages'
 import Sales from './pages/Sales'
+import Expenses from './pages/Expenses'
 import History from './pages/History'
+import Suppliers from './pages/settings/Suppliers'
+import ProductTypes from './pages/settings/ProductTypes'
+import Services from './pages/settings/Services'
 import Layout from './components/Layout'
 
 function ProtectedRoute({ children }) {
   const { user, isLoading } = useAuth()
 
+  // Chargement de la page
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-beige-50">
@@ -45,9 +51,14 @@ function AppRoutes() {
       >
         <Route index element={<Dashboard />} />
         <Route path="produits" element={<Products />} />
+        <Route path="inventaire" element={<Inventory />} />
         <Route path="arrivages" element={<Arrivages />} />
         <Route path="ventes" element={<Sales />} />
+        <Route path="depenses" element={<Expenses />} />
         <Route path="historique" element={<History />} />
+        <Route path="parametres/fournisseurs" element={<Suppliers />} />
+        <Route path="parametres/types-produits" element={<ProductTypes />} />
+        <Route path="parametres/prestations" element={<Services />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

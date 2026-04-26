@@ -1,13 +1,15 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { ClipboardList, Clock, Package, Search, ShoppingCart, TruckIcon, Wallet } from 'lucide-react'
 import { api } from '../api/mock'
-import { Clock, Package, Search, ShoppingCart, TruckIcon } from 'lucide-react'
 
 const FILTERS = [
   { id: 'all', label: 'Tous' },
   { id: 'vente', label: 'Ventes' },
   { id: 'arrivage', label: 'Arrivages' },
+  { id: 'inventaire', label: 'Inventaires' },
   { id: 'produit', label: 'Produits' },
+  { id: 'depense', label: 'Depenses' },
 ]
 
 function getEventType(item) {
@@ -15,7 +17,9 @@ function getEventType(item) {
 
   if (titre.startsWith('vente')) return 'vente'
   if (titre.startsWith('arrivage')) return 'arrivage'
-  if (titre.startsWith('nouveau produit')) return 'produit'
+  if (titre.startsWith('inventaire')) return 'inventaire'
+  if (titre.startsWith('nouveau produit') || titre.startsWith('produit mis')) return 'produit'
+  if (titre.startsWith('depense')) return 'depense'
   return 'all'
 }
 
@@ -32,7 +36,9 @@ function History() {
     all: data.length,
     vente: data.filter((item) => getEventType(item) === 'vente').length,
     arrivage: data.filter((item) => getEventType(item) === 'arrivage').length,
+    inventaire: data.filter((item) => getEventType(item) === 'inventaire').length,
     produit: data.filter((item) => getEventType(item) === 'produit').length,
+    depense: data.filter((item) => getEventType(item) === 'depense').length,
   }), [data])
 
   const historique = useMemo(() => {
@@ -57,7 +63,7 @@ function History() {
         <div>
           <h1 className="text-2xl font-semibold text-beige-900">Historique</h1>
           <p className="text-beige-600 mt-1">
-            Suivez facilement les ventes, les arrivages et les ajouts de produits.
+            Suivez les ventes, les arrivages, les inventaires, les depenses et les produits.
           </p>
         </div>
         <span className="text-sm text-beige-500">
@@ -65,11 +71,13 @@ function History() {
         </span>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <MetricCard label="Toutes les actions" value={counts.all} />
         <MetricCard label="Ventes" value={counts.vente} icon={ShoppingCart} tone="success" />
         <MetricCard label="Arrivages" value={counts.arrivage} icon={TruckIcon} />
+        <MetricCard label="Inventaires" value={counts.inventaire} icon={ClipboardList} tone="warning" />
         <MetricCard label="Produits" value={counts.produit} icon={Package} tone="warning" />
+        <MetricCard label="Depenses" value={counts.depense} icon={Wallet} tone="danger" />
       </div>
 
       <div className="bg-white rounded-xl border border-beige-200 p-4 md:p-5 space-y-4">
@@ -80,7 +88,7 @@ function History() {
             placeholder="Rechercher par titre ou description"
             className="w-full pl-11 pr-4 py-3 border border-beige-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-beige-300"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(event) => setSearch(event.target.value)}
           />
         </div>
 
@@ -140,6 +148,7 @@ function MetricCard({ label, value, icon: Icon = Clock, tone = 'default' }) {
     default: 'bg-white border-beige-200 text-beige-900',
     success: 'bg-green-50 border-green-200 text-green-800',
     warning: 'bg-amber-50 border-amber-200 text-amber-800',
+    danger: 'bg-red-50 border-red-200 text-red-700',
   }
 
   return (
@@ -174,12 +183,26 @@ function HistoryCard({ item }) {
       iconBox: 'bg-white text-blue-700',
       badge: 'bg-blue-100 text-blue-700',
     },
-    produit: {
-      label: 'Produit',
-      icon: Package,
+    inventaire: {
+      label: 'Inventaire',
+      icon: ClipboardList,
       container: 'border-amber-200 bg-amber-50',
       iconBox: 'bg-white text-amber-700',
       badge: 'bg-amber-100 text-amber-700',
+    },
+    produit: {
+      label: 'Produit',
+      icon: Package,
+      container: 'border-beige-200 bg-beige-50',
+      iconBox: 'bg-white text-beige-700',
+      badge: 'bg-beige-100 text-beige-700',
+    },
+    depense: {
+      label: 'Depense',
+      icon: Wallet,
+      container: 'border-red-200 bg-red-50',
+      iconBox: 'bg-white text-red-700',
+      badge: 'bg-red-100 text-red-700',
     },
     all: {
       label: 'Activite',
@@ -219,9 +242,7 @@ function HistoryCard({ item }) {
               })}
             </time>
           </div>
-          <p className="mt-3 text-sm text-beige-700 leading-6">
-            {item.description}
-          </p>
+          <p className="mt-3 text-sm text-beige-700 leading-6">{item.description}</p>
         </div>
       </div>
     </article>
