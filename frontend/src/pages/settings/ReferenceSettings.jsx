@@ -12,6 +12,7 @@ function ReferenceSettings({
   toggleMutationFn,
   emptyLabel,
   extraField,
+  addLabel = 'Ajouter',
 }) {
   const [formData, setFormData] = useState({
     nom: '',
@@ -27,9 +28,6 @@ function ReferenceSettings({
 
   const invalidateData = () => {
     queryClient.invalidateQueries({ queryKey })
-    queryClient.invalidateQueries({ queryKey: ['produits'] })
-    queryClient.invalidateQueries({ queryKey: ['historique'] })
-    queryClient.invalidateQueries({ queryKey: ['stats'] })
   }
 
   const addMutation = useMutation({
@@ -80,23 +78,23 @@ function ReferenceSettings({
 
       <div className="grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] gap-6">
         <div className="bg-white rounded-xl border border-beige-200 p-6">
-          <h2 className="text-lg font-semibold text-beige-900 mb-2">Nouvel element</h2>
-          <p className="text-sm text-beige-600 mb-6">
+          <h2 className="text-lg font-semibold text-beige-900 mb-2">{addLabel}</h2>
+          {/* <p className="text-sm text-beige-600 mb-6">
             Les parametres actifs sont disponibles partout dans les formulaires.
-          </p>
+          </p> */}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-beige-700 mb-2">
+              {/* <label className="block text-sm font-medium text-beige-700 mb-2">
                 Libelle
-              </label>
+              </label> */}
               <input
                 type="text"
                 value={formData.nom}
                 onChange={(event) => setFormData((current) => ({ ...current, nom: event.target.value }))}
                 required
                 className="w-full px-4 py-3 rounded-lg border border-beige-300 focus:border-beige-500 focus:ring-2 focus:ring-beige-200 outline-none"
-                placeholder="Saisir un libelle"
+                // placeholder="Saisir un libelle"
               />
             </div>
 

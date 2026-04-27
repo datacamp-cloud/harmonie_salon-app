@@ -7,10 +7,8 @@ import { useToast } from '../context/ToastContext'
 function Expenses() {
   const [formData, setFormData] = useState({
     date: new Date().toISOString().slice(0, 10),
-    libelle: '',
+    chargeId: '',
     montant: '',
-    fournisseurId: '',
-    prestationId: '',
     notes: '',
   })
   const toast = useToast()
@@ -21,21 +19,18 @@ function Expenses() {
     queryFn: api.getDepenses,
   })
 
-  const { data: fournisseurs = [] } = useQuery({
-    queryKey: ['fournisseurs'],
-    queryFn: api.getFournisseurs,
+  const { data: charges = [] } = useQuery({
+    queryKey: ['charges'],
+    queryFn: api.getCharges,
   })
 
-  const { data: prestations = [] } = useQuery({
-    queryKey: ['prestations'],
-    queryFn: api.getPrestations,
-  })
+  const chargesActives = charges.filter((c) => c.actif)
 
   const totalMois = useMemo(
     () =>
       depenses
-        .filter((depense) => depense.date.startsWith(new Date().toISOString().slice(0, 7)))
-        .reduce((total, depense) => total + depense.montant, 0),
+        .filter((d) => d.date.startsWith(new Date().toISOString().slice(0, 7)))
+        .reduce((t, d) => t + d.montant, 0),
     [depenses],
   )
 
@@ -47,24 +42,24 @@ function Expenses() {
       queryClient.invalidateQueries({ queryKey: ['stats'] })
       setFormData({
         date: new Date().toISOString().slice(0, 10),
-        libelle: '',
+        chargeId: '',
         montant: '',
-        fournisseurId: '',
-        prestationId: '',
         notes: '',
       })
       toast.success('Depense enregistree avec succes')
     },
     onError: (error) => {
-      toast.error(error.message || 'Erreur lors de l enregistrement de la depense')
+      toast.error(error.message || 'Erreur lors de l enregistrement')
     },
   })
 
   const handleSubmit = (event) => {
     event.preventDefault()
     addMutation.mutate({
-      ...formData,
+      date: formData.date,
+      chargeId: Number(formData.chargeId),
       montant: Number(formData.montant),
+      notes: formData.notes,
     })
   }
 
@@ -84,34 +79,38 @@ function Expenses() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[0.95fr_1.05fr] gap-6">
+
+        {/* Formulaire */}
         <div className="bg-white rounded-xl border border-beige-200 p-6">
           <h2 className="text-lg font-semibold text-beige-900 mb-2 flex items-center gap-2">
             <Wallet size={20} className="text-beige-600" />
             Nouvelle depense
           </h2>
           <p className="text-sm text-beige-600 mb-6">
-            Rattachez une depense a un fournisseur ou a une prestation quand c est utile.
+            Associez chaque depense a une charge configuree dans les parametres.
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+            {/* Date + Montant sur la même ligne */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-beige-700 mb-2">Date</label>
                 <input
                   type="date"
                   value={formData.date}
-                  onChange={(event) => setFormData((current) => ({ ...current, date: event.target.value }))}
+                  onChange={(e) => setFormData((c) => ({ ...c, date: e.target.value }))}
                   required
                   className="w-full px-4 py-3 rounded-lg border border-beige-300 focus:border-beige-500 focus:ring-2 focus:ring-beige-200 outline-none"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-beige-700 mb-2">Montant</label>
+                <label className="block text-sm font-medium text-beige-700 mb-2">Montant (FCFA)</label>
                 <input
                   type="number"
-                  min="0"
+                  min="1"
                   value={formData.montant}
-                  onChange={(event) => setFormData((current) => ({ ...current, montant: event.target.value }))}
+                  onChange={(e) => setFormData((c) => ({ ...c, montant: e.target.value }))}
                   required
                   className="w-full px-4 py-3 rounded-lg border border-beige-300 focus:border-beige-500 focus:ring-2 focus:ring-beige-200 outline-none"
                   placeholder="0"
@@ -119,59 +118,40 @@ function Expenses() {
               </div>
             </div>
 
+            {/* Charge */}
             <div>
-              <label className="block text-sm font-medium text-beige-700 mb-2">Libelle</label>
-              <input
-                type="text"
-                value={formData.libelle}
-                onChange={(event) => setFormData((current) => ({ ...current, libelle: event.target.value }))}
+              <label className="block text-sm font-medium text-beige-700 mb-2">Charge</label>
+              <select
+                value={formData.chargeId}
+                onChange={(e) => setFormData((c) => ({ ...c, chargeId: e.target.value }))}
                 required
-                className="w-full px-4 py-3 rounded-lg border border-beige-300 focus:border-beige-500 focus:ring-2 focus:ring-beige-200 outline-none"
-                placeholder="Ex: Achat gants, entretien sechoir..."
-              />
+                className="w-full px-4 py-3 rounded-lg border border-beige-300 focus:border-beige-500 focus:ring-2 focus:ring-beige-200 outline-none bg-white"
+              >
+                <option value="">-- Selectionnez une charge --</option>
+                {chargesActives.map((charge) => (
+                  <option key={charge.id} value={charge.id}>
+                    {charge.nom}
+                  </option>
+                ))}
+              </select>
+              {chargesActives.length === 0 && (
+                <p className="text-xs text-amber-600 mt-1">
+                  Aucune charge disponible. Ajoutez-en dans Parametres &gt; Charges.
+                </p>
+              )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-beige-700 mb-2">Fournisseur</label>
-                <select
-                  value={formData.fournisseurId}
-                  onChange={(event) => setFormData((current) => ({ ...current, fournisseurId: event.target.value }))}
-                  className="w-full px-4 py-3 rounded-lg border border-beige-300 focus:border-beige-500 focus:ring-2 focus:ring-beige-200 outline-none bg-white"
-                >
-                  <option value="">-- Aucun --</option>
-                  {fournisseurs.filter((item) => item.actif).map((fournisseur) => (
-                    <option key={fournisseur.id} value={fournisseur.id}>
-                      {fournisseur.nom}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-beige-700 mb-2">Prestation</label>
-                <select
-                  value={formData.prestationId}
-                  onChange={(event) => setFormData((current) => ({ ...current, prestationId: event.target.value }))}
-                  className="w-full px-4 py-3 rounded-lg border border-beige-300 focus:border-beige-500 focus:ring-2 focus:ring-beige-200 outline-none bg-white"
-                >
-                  <option value="">-- Aucune --</option>
-                  {prestations.filter((item) => item.actif).map((prestation) => (
-                    <option key={prestation.id} value={prestation.id}>
-                      {prestation.nom}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
+            {/* Notes */}
             <div>
-              <label className="block text-sm font-medium text-beige-700 mb-2">Notes</label>
+              <label className="block text-sm font-medium text-beige-700 mb-2">
+                Notes <span className="text-beige-400 font-normal">(optionnel)</span>
+              </label>
               <textarea
                 value={formData.notes}
-                onChange={(event) => setFormData((current) => ({ ...current, notes: event.target.value }))}
+                onChange={(e) => setFormData((c) => ({ ...c, notes: e.target.value }))}
                 rows={3}
                 className="w-full px-4 py-3 rounded-lg border border-beige-300 focus:border-beige-500 focus:ring-2 focus:ring-beige-200 outline-none resize-none"
-                placeholder="Observation optionnelle"
+                placeholder="Observation..."
               />
             </div>
 
@@ -195,18 +175,19 @@ function Expenses() {
           </form>
         </div>
 
+        {/* Historique */}
         <div className="bg-white rounded-xl border border-beige-200 p-6">
           <div className="flex items-center justify-between gap-3 mb-6">
             <div>
               <h2 className="text-lg font-semibold text-beige-900">Historique des depenses</h2>
-              <p className="text-sm text-beige-600">Visualisez rapidement les postes engages.</p>
+              <p className="text-sm text-beige-600">Visualisez les postes de charges engages.</p>
             </div>
-            <span className="text-sm text-beige-500">{depenses.length} depense(s)</span>
+            <span className="text-sm text-beige-400">{depenses.length} depense(s)</span>
           </div>
 
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-beige-600"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-beige-400" />
             </div>
           ) : depenses.length > 0 ? (
             <ul className="space-y-3 max-h-[38rem] overflow-y-auto pr-1">
@@ -214,25 +195,22 @@ function Expenses() {
                 <li key={depense.id} className="rounded-xl border border-beige-200 bg-beige-50 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <p className="font-medium text-beige-900">{depense.libelle}</p>
-                      <p className="text-sm text-beige-600 mt-1">
-                        Fournisseur: {depense.fournisseurNom} | Prestation: {depense.prestationNom}
-                      </p>
+                      <p className="font-medium text-beige-900">{depense.chargeNom}</p>
+                      {depense.notes && (
+                        <p className="text-sm text-beige-500 mt-0.5">{depense.notes}</p>
+                      )}
                     </div>
-                    <span className="px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-700">
+                    <span className="px-3 py-1 rounded-full text-sm font-semibold bg-red-50 text-red-700">
                       {depense.montant.toLocaleString('fr-FR')} FCFA
                     </span>
                   </div>
-                  {depense.notes && (
-                    <p className="mt-3 text-sm text-beige-700">{depense.notes}</p>
-                  )}
-                  <div className="mt-3 text-xs text-beige-500">{depense.date}</div>
+                  <div className="mt-2 text-xs text-beige-400">{depense.date}</div>
                 </li>
               ))}
             </ul>
           ) : (
             <div className="py-10 text-center">
-              <p className="text-beige-600">Aucune depense enregistree</p>
+              <p className="text-beige-500">Aucune depense enregistree</p>
             </div>
           )}
         </div>
@@ -246,7 +224,6 @@ function InfoCard({ label, value, tone = 'default' }) {
     default: 'bg-white border-beige-200 text-beige-900',
     warning: 'bg-amber-50 border-amber-200 text-amber-800',
   }
-
   return (
     <div className={`rounded-lg border px-3 py-2 min-w-[130px] ${tones[tone]}`}>
       <p className="text-xs opacity-70">{label}</p>

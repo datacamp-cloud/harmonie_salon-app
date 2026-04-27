@@ -11,6 +11,7 @@ function Services() {
       addMutationFn={api.addPrestation}
       toggleMutationFn={api.togglePrestationActif}
       emptyLabel="Aucune prestation pour le moment."
+      addLabel="Nouvelle prestation"
       extraField={{ type: 'price' }}
     />
   )

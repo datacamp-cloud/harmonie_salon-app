@@ -11,6 +11,7 @@ function Suppliers() {
       addMutationFn={api.addFournisseur}
       toggleMutationFn={api.toggleFournisseurActif}
       emptyLabel="Aucun fournisseur pour le moment."
+      addLabel="Nouveau fournisseur"
     />
   )
 }

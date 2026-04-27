@@ -1,24 +1,15 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, Package, Plus, Trash2, TruckIcon } from 'lucide-react'
+import { Loader2, Package, Plus, CheckCircle2, Trash2, TruckIcon } from 'lucide-react'
 import { api } from '../api/mock'
 import { useToast } from '../context/ToastContext'
 
-const createItem = () => ({ produitId: '', quantite: '', fournisseurId: '' })
-
-// Retourne les fournisseurs autorisés pour un produit donné
-// basé sur la liaison type <-> fournisseurs
-function getFournisseursDuProduit(produitId, produits, typesProduits, fournisseurs) {
-  const produit = produits.find((p) => p.id === Number(produitId))
-  if (!produit) return []
-  const type = typesProduits.find((t) => t.id === produit.typeId)
-  if (!type) return []
-  return fournisseurs.filter((f) => type.fournisseurIds.includes(f.id) && f.actif)
-}
+const createItem = () => ({ produitId: '', quantite: '' })
 
 function Arrivages() {
   const [formData, setFormData] = useState({
     date: new Date().toISOString().slice(0, 10),
+    fournisseurId: '',
     items: [createItem()],
     isValidated: false,
   })
@@ -33,11 +24,6 @@ function Arrivages() {
   const { data: fournisseurs = [] } = useQuery({
     queryKey: ['fournisseurs'],
     queryFn: api.getFournisseurs,
-  })
-
-  const { data: typesProduits = [] } = useQuery({
-    queryKey: ['types-produits'],
-    queryFn: api.getTypesProduits,
   })
 
   const { data: arrivages = [], isLoading } = useQuery({
@@ -59,6 +45,7 @@ function Arrivages() {
       queryClient.invalidateQueries({ queryKey: ['stats'] })
       setFormData({
         date: new Date().toISOString().slice(0, 10),
+        fournisseurId: '',
         items: [createItem()],
         isValidated: false,
       })
@@ -66,6 +53,20 @@ function Arrivages() {
     },
     onError: (error) => {
       toast.error(error.message || 'Erreur lors de l enregistrement de l arrivage')
+    },
+  })
+
+  const validateMutation = useMutation({
+    mutationFn: api.validateArrivage,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['arrivages'] })
+      queryClient.invalidateQueries({ queryKey: ['produits'] })
+      queryClient.invalidateQueries({ queryKey: ['historique'] })
+      queryClient.invalidateQueries({ queryKey: ['stats'] })
+      toast.success('Arrivage valide avec succes')
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Erreur lors de la validation')
     },
   })
 
@@ -102,7 +103,7 @@ function Arrivages() {
       items: formData.items.map((item) => ({
         produitId: Number(item.produitId),
         quantite: Number(item.quantite),
-        fournisseurId: Number(item.fournisseurId),
+        fournisseurId: Number(formData.fournisseurId),
       })),
       isValidated: formData.isValidated,
     })
@@ -117,7 +118,7 @@ function Arrivages() {
         <div>
           <h1 className="text-2xl font-semibold text-beige-900">Arrivages</h1>
           <p className="text-beige-600 mt-1">
-            Chaque ligne produit a son propre fournisseur. Le stock est mis a jour apres validation.
+            Le stock est mis a jour apres validation.
           </p>
         </div>
         <div className="grid grid-cols-3 gap-3 text-sm">
@@ -139,121 +140,85 @@ function Arrivages() {
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Date */}
-            <div>
-              <label className="block text-sm font-medium text-beige-700 mb-2">Date</label>
-              <input
-                type="date"
-                value={formData.date}
-                onChange={(e) => setFormData((c) => ({ ...c, date: e.target.value }))}
-                required
-                className="w-full px-4 py-3 rounded-lg border border-beige-300 focus:border-beige-500 focus:ring-2 focus:ring-beige-200 outline-none"
-              />
-            </div>
+            {/* Date + Fournisseur sur la même ligne */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-beige-700 mb-2">Date</label>
+          <input
+            type="date"
+            value={formData.date}
+            onChange={(e) => setFormData((c) => ({ ...c, date: e.target.value }))}
+            required
+            className="w-full px-4 py-3 rounded-lg border border-beige-300 focus:border-beige-500 focus:ring-2 focus:ring-beige-200 outline-none"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-beige-700 mb-2">Fournisseur</label>
+          <select
+            value={formData.fournisseurId}
+            onChange={(e) => setFormData((c) => ({ ...c, fournisseurId: e.target.value }))}
+            required
+            className="w-full px-4 py-3 rounded-lg border border-beige-300 focus:border-beige-500 focus:ring-2 focus:ring-beige-200 outline-none bg-white"
+          >
+            <option value="">-- Choisir un fournisseur --</option>
+            {fournisseurs.filter((f) => f.actif).map((f) => (
+              <option key={f.id} value={f.id}>{f.nom}</option>
+            ))}
+          </select>
+        </div>
+      </div>
 
-            {/* Lignes produits */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="block text-sm font-medium text-beige-700">
-                  Produits de l arrivage
-                </label>
-                <button
-                  type="button"
-                  onClick={addLine}
-                  className="text-sm text-beige-700 hover:text-beige-900 flex items-center gap-2"
-                >
-                  <Plus size={16} />
-                  Ajouter une ligne
-                </button>
-              </div>
+      {/* Lignes produits — produit + quantité uniquement */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <label className="block text-sm font-medium text-beige-700">
+            Produits de l arrivage
+          </label>
+          <button type="button" onClick={addLine}
+            className="text-sm text-beige-700 hover:text-beige-900 flex items-center gap-2">
+            <Plus size={16} />
+            Ajouter une ligne
+          </button>
+        </div>
 
-              {formData.items.map((item, index) => {
-                const fournisseursDispo = getFournisseursDuProduit(
-                  item.produitId,
-                  produits,
-                  typesProduits,
-                  fournisseurs,
-                )
-                const produitSelectionne = produits.find((p) => p.id === Number(item.produitId))
+              {formData.items.map((item, index) => (
+                <div key={index} className="rounded-xl border border-beige-200 bg-beige-50 p-4">
+                  <div className="grid grid-cols-[1fr_160px_auto] gap-3">
+                    <select
+                      value={item.produitId}
+                      onChange={(e) => handleItemChange(index, 'produitId', e.target.value)}
+                      required
+                      className="w-full px-4 py-3 rounded-lg border border-beige-300 focus:border-beige-500 focus:ring-2 focus:ring-beige-200 outline-none bg-white"
+                    >
+                      <option value="">-- Choisir un produit --</option>
+                      {produits.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.nom} | Stock {p.stock}
+                        </option>
+                      ))}
+                    </select>
 
-                return (
-                  <div
-                    key={index}
-                    className="rounded-xl border border-beige-200 bg-beige-50 p-4 space-y-3"
-                  >
-                    {/* Ligne 1 : produit + supprimer */}
-                    <div className="grid grid-cols-[1fr_auto] gap-3">
-                      <select
-                        value={item.produitId}
-                        onChange={(e) => handleItemChange(index, 'produitId', e.target.value)}
-                        required
-                        className="w-full px-4 py-3 rounded-lg border border-beige-300 focus:border-beige-500 focus:ring-2 focus:ring-beige-200 outline-none bg-white"
-                      >
-                        <option value="">-- Choisir un produit --</option>
-                        {produits.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.nom} | Stock actuel {p.stock}
-                          </option>
-                        ))}
-                      </select>
+                    <input
+                      type="number"
+                      min="1"
+                      value={item.quantite}
+                      onChange={(e) => handleItemChange(index, 'quantite', e.target.value)}
+                      required
+                      className="w-full px-4 py-3 rounded-lg border border-beige-300 focus:border-beige-500 focus:ring-2 focus:ring-beige-200 outline-none"
+                      placeholder="Qte"
+                    />
 
-                      <button
-                        type="button"
-                        onClick={() => removeLine(index)}
-                        disabled={formData.items.length === 1}
-                        className="px-3 py-3 rounded-lg border border-beige-300 text-beige-700 hover:bg-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
-
-                    {/* Ligne 2 : fournisseur + quantité */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs text-beige-600 mb-1">Fournisseur</label>
-                        <select
-                          value={item.fournisseurId}
-                          onChange={(e) => handleItemChange(index, 'fournisseurId', e.target.value)}
-                          required
-                          disabled={!item.produitId}
-                          className="w-full px-4 py-3 rounded-lg border border-beige-300 focus:border-beige-500 focus:ring-2 focus:ring-beige-200 outline-none bg-white disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <option value="">
-                            {!item.produitId
-                              ? '-- Choisir un produit d abord --'
-                              : fournisseursDispo.length === 0
-                                ? '-- Aucun fournisseur lie a ce type --'
-                                : '-- Choisir un fournisseur --'}
-                          </option>
-                          {fournisseursDispo.map((f) => (
-                            <option key={f.id} value={f.id}>
-                              {f.nom}
-                            </option>
-                          ))}
-                        </select>
-                        {item.produitId && fournisseursDispo.length === 0 && (
-                          <p className="text-xs text-amber-600 mt-1">
-                            Aucun fournisseur n est lie au type "{produitSelectionne?.typeNom}". Configurez-le dans Parametres.
-                          </p>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="block text-xs text-beige-600 mb-1">Quantite</label>
-                        <input
-                          type="number"
-                          min="1"
-                          value={item.quantite}
-                          onChange={(e) => handleItemChange(index, 'quantite', e.target.value)}
-                          required
-                          className="w-full px-4 py-3 rounded-lg border border-beige-300 focus:border-beige-500 focus:ring-2 focus:ring-beige-200 outline-none"
-                          placeholder="0"
-                        />
-                      </div>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeLine(index)}
+                      disabled={formData.items.length === 1}
+                      className="px-3 py-3 rounded-lg border border-beige-300 text-beige-700 hover:bg-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <Trash2 size={18} />
+                    </button>
                   </div>
-                )
-              })}
+                </div>
+              ))}              
             </div>
 
             {/* Validation */}
@@ -326,15 +291,28 @@ function Arrivages() {
                         {arrivage.items.length} produit(s) | {arrivage.totalQuantite} unite(s)
                       </p>
                     </div>
-                    <span
-                      className={`px-3 py-1 rounded-full text-sm font-medium ${
-                        arrivage.isValidated
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-amber-100 text-amber-800'
-                      }`}
-                    >
-                      {arrivage.isValidated ? 'Valide' : 'En attente'}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {!arrivage.isValidated && (
+                        <button
+                          type="button"
+                          onClick={() => validateMutation.mutate(arrivage.id)}
+                          disabled={validateMutation.isPending}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 text-white text-xs font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+                        >
+                          <CheckCircle2 size={13} />
+                          Valider
+                        </button>
+                      )}
+                      <span
+                        className={`px-3 py-1 rounded-full text-sm font-medium ${
+                          arrivage.isValidated
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}
+                      >
+                        {arrivage.isValidated ? 'Valide' : 'En attente'}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Détail par ligne avec fournisseur */}

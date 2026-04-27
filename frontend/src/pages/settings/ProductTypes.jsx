@@ -11,6 +11,7 @@ function ProductTypes() {
       addMutationFn={api.addTypeProduit}
       toggleMutationFn={api.toggleTypeProduitActif}
       emptyLabel="Aucun type de produit pour le moment."
+      addLabel="Nouveau type de produit"
     />
   )
 }

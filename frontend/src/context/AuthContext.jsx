@@ -8,7 +8,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     // Check for existing session in localStorage
-    const storedUser = localStorage.getItem('webeauty_user')
+    const storedUser = localStorage.getItem('webstock_user')
     if (storedUser) {
       setUser(JSON.parse(storedUser))
     }
@@ -17,12 +17,12 @@ export function AuthProvider({ children }) {
 
   const login = (userData) => {
     setUser(userData)
-    localStorage.setItem('webeauty_user', JSON.stringify(userData))
+    localStorage.setItem('webstock_user', JSON.stringify(userData))
   }
 
   const logout = () => {
     setUser(null)
-    localStorage.removeItem('webeauty_user')
+    localStorage.removeItem('webstock_user')
   }
 
   return (
