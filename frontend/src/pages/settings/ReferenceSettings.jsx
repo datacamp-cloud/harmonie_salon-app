@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, Plus, Power, Tags } from 'lucide-react'
+import { Loader2, Pencil, Plus, Power, Tags, Trash2, X } from 'lucide-react'
 import { useToast } from '../../context/ToastContext'
+import ConfirmModal from '../../components/ConfirmModal'
 
 function ReferenceSettings({
   title,
@@ -9,15 +10,17 @@ function ReferenceSettings({
   queryKey,
   queryFn,
   addMutationFn,
-  toggleMutationFn,
+  updateMutationFn = null,
+  deleteMutationFn = null,
+  toggleMutationFn = null,
   emptyLabel,
   extraField,
   addLabel = 'Ajouter',
+  nomPlaceholder= 'Saisir un libelle',
 }) {
-  const [formData, setFormData] = useState({
-    nom: '',
-    prix: '',
-  })
+  const [formData, setFormData] = useState({ nom: '', prix: '', localisation: '' })
+  const [editingId, setEditingId] = useState(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null)
   const toast = useToast()
   const queryClient = useQueryClient()
 
@@ -35,15 +38,46 @@ function ReferenceSettings({
     onSuccess: () => {
       invalidateData()
       setFormData({ nom: '', prix: '' })
+      setEditingId(null)
       toast.success(`${title.slice(0, -1)} ajoute avec succes`)
     },
-    onError: (error) => {
-      toast.error(error.message || 'Erreur lors de l ajout')
-    },
+    onError: (error) => toast.error(error.message || 'Erreur lors de l ajout'),
   })
 
+  const updateMutation = useMutation({
+    mutationFn: updateMutationFn ?? (() => Promise.resolve()),
+    onSuccess: () => {
+      invalidateData()
+      setFormData({ nom: '', prix: '' })
+      setEditingId(null)
+      toast.success('Modifie avec succes')
+    },
+    onError: (error) => toast.error(error.message || 'Erreur modification'),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteMutationFn ?? (() => Promise.resolve()),
+    onSuccess: () => {
+      invalidateData()
+      setConfirmDeleteId(null)
+      toast.success('Supprime avec succes')
+    },
+    onError: (error) => toast.error(error.message || 'Erreur suppression'),
+  })
+
+  const handleEdit = (item) => {
+    setEditingId(item.id)
+    setFormData({ nom: item.nom, prix: item.prix ?? item.telephone ?? '', localisation: item.localisation ?? '' })
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const handleCancelEdit = () => {
+    setEditingId(null)
+    setFormData({ nom: '', prix: '', localisation: '' })
+  }
+
   const toggleMutation = useMutation({
-    mutationFn: toggleMutationFn,
+    mutationFn: toggleMutationFn ?? (() => Promise.resolve()),
     onSuccess: () => {
       invalidateData()
       toast.success('Statut mis a jour')
@@ -55,10 +89,11 @@ function ReferenceSettings({
 
   const handleSubmit = (event) => {
     event.preventDefault()
-    addMutation.mutate({
-      nom: formData.nom,
-      prix: formData.prix,
-    })
+    if (editingId && updateMutationFn) {
+      updateMutation.mutate({ id: editingId, nom: formData.nom, prix: formData.prix, localisation: formData.localisation })
+    } else {
+      addMutation.mutate({ nom: formData.nom, prix: formData.prix, localisation: formData.localisation })
+    }
   }
 
   return (
@@ -78,23 +113,17 @@ function ReferenceSettings({
 
       <div className="grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] gap-6">
         <div className="bg-white rounded-xl border border-beige-200 p-6">
-          <h2 className="text-lg font-semibold text-beige-900 mb-2">{addLabel}</h2>
-          {/* <p className="text-sm text-beige-600 mb-6">
-            Les parametres actifs sont disponibles partout dans les formulaires.
-          </p> */}
+          <h2 className="text-lg font-semibold text-beige-900 mb-2">{editingId ? 'Modifier' : addLabel}</h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              {/* <label className="block text-sm font-medium text-beige-700 mb-2">
-                Libelle
-              </label> */}
               <input
                 type="text"
                 value={formData.nom}
                 onChange={(event) => setFormData((current) => ({ ...current, nom: event.target.value }))}
                 required
                 className="w-full px-4 py-3 rounded-lg border border-beige-300 focus:border-beige-500 focus:ring-2 focus:ring-beige-200 outline-none"
-                // placeholder="Saisir un libelle"
+                placeholder={nomPlaceholder}
               />
             </div>
 
@@ -114,23 +143,60 @@ function ReferenceSettings({
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={addMutation.isPending}
-              className="w-full px-4 py-3 bg-beige-900 text-white rounded-lg hover:bg-beige-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {addMutation.isPending ? (
-                <>
-                  <Loader2 size={18} className="animate-spin" />
-                  Enregistrement...
-                </>
-              ) : (
-                <>
-                  <Plus size={18} />
-                  Ajouter
-                </>
+            {extraField?.type === 'phone' && (
+              <div>
+                <label className="block text-sm font-medium text-beige-700 mb-2">
+                  Telephone <span className="text-beige-400 font-normal">(Facultatif)</span>
+                </label>
+                <input
+                  type="tel"
+                  value={formData.prix}
+                  onChange={(event) => {
+                    // Formatage automatique CI : XX XX XX XX XX
+                    let val = event.target.value.replace(/\D/g, '').slice(0, 10)
+                    val = val.replace(/(\d{2})(?=\d)/g, '$1 ').trim()
+                    setFormData((current) => ({ ...current, prix: val }))
+                  }}
+                  className="w-full px-4 py-3 rounded-lg border border-beige-300 focus:border-beige-500 focus:ring-2 focus:ring-beige-200 outline-none"
+                  placeholder="Ex: 07 00 11 22 33"
+                />
+              </div>
+            )}
+
+            {(extraField?.type === 'phone' || extraField?.withLocalisation) && (
+              <div>
+                <label className="block text-sm font-medium text-beige-700 mb-2">
+                  Localisation <span className="text-beige-400 font-normal">(Facultatif)</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.localisation}
+                  onChange={(event) => setFormData((current) => ({ ...current, localisation: event.target.value }))}
+                  className="w-full px-4 py-3 rounded-lg border border-beige-300 focus:border-beige-500 focus:ring-2 focus:ring-beige-200 outline-none"
+                  placeholder="Ex: Abidjan Cocody"
+                />
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              {editingId && (
+                <button type="button" onClick={handleCancelEdit}
+                  className="flex-1 px-4 py-3 border border-beige-300 text-beige-700 rounded-lg hover:bg-beige-50 transition-colors flex items-center justify-center gap-2">
+                  <X size={18} /> Annuler
+                </button>
               )}
-            </button>
+              <button
+                type="submit"
+                disabled={addMutation.isPending || updateMutation.isPending}
+                className="flex-1 px-4 py-3 bg-beige-900 text-white rounded-lg hover:bg-beige-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {(addMutation.isPending || updateMutation.isPending) ? (
+                  <><Loader2 size={18} className="animate-spin" /> Enregistrement...</>
+                ) : (
+                  <><Plus size={18} />{editingId ? 'Enregistrer' : 'Ajouter'}</>
+                )}
+              </button>
+            </div>
           </form>
         </div>
 
@@ -163,27 +229,42 @@ function ReferenceSettings({
                       {typeof item.prix === 'number' && (
                         <p className="text-sm text-beige-600">{item.prix.toLocaleString('fr-FR')} FCFA</p>
                       )}
+                      {item.telephone != null && item.telephone !== '' && (
+                        <p className="text-sm text-beige-600">{item.telephone}</p>
+                      )}
+                      {item.localisation != null && item.localisation !== '' && (
+                        <p className="text-sm text-beige-500">{item.localisation}</p>
+                      )}
                     </div>
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <span
-                      className={`px-3 py-1 rounded-full text-sm font-medium ${
-                        item.actif
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-slate-200 text-slate-700'
-                      }`}
-                    >
-                      {item.actif ? 'Actif' : 'Inactif'}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => toggleMutation.mutate(item.id)}
-                      className="px-3 py-2 rounded-lg border border-beige-300 text-beige-700 hover:bg-white transition-colors flex items-center gap-2"
-                    >
-                      <Power size={16} />
-                      {item.actif ? 'Desactiver' : 'Activer'}
-                    </button>
+                    {toggleMutationFn && (
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                        item.actif ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-700'
+                      }`}>
+                        {item.actif ? 'Actif' : 'Inactif'}
+                      </span>
+                    )}
+                    {updateMutationFn && (
+                      <button type="button" onClick={() => handleEdit(item)}
+                        className="px-3 py-2 rounded-lg border border-beige-300 text-beige-700 hover:bg-white transition-colors flex items-center gap-2">
+                        <Pencil size={16} />
+                      </button>
+                    )}
+                    {toggleMutationFn && (
+                      <button type="button" onClick={() => toggleMutation.mutate(item.id)}
+                        className="px-3 py-2 rounded-lg border border-beige-300 text-beige-700 hover:bg-white transition-colors flex items-center gap-2">
+                        <Power size={16} />
+                        {/* {item.actif ? 'Desactiver' : 'Activer'} */}
+                      </button>
+                    )}
+                    {deleteMutationFn && (
+                      <button type="button" onClick={() => setConfirmDeleteId(item.id)}
+                        className="px-3 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2">
+                        <Trash2 size={16} />
+                      </button>
+                    )}
                   </div>
                 </li>
               ))}
@@ -195,6 +276,15 @@ function ReferenceSettings({
           )}
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={confirmDeleteId !== null}
+        onCancel={() => setConfirmDeleteId(null)}
+        onConfirm={() => { deleteMutation.mutate(confirmDeleteId); setConfirmDeleteId(null) }}
+        isPending={deleteMutation.isPending}
+        title="Supprimer cet element ?"
+        message="Cette action est irreversible. L element sera archive mais ne sera plus accessible dans l application."
+      />
     </div>
   )
 }

@@ -1,20 +1,37 @@
-# BACKEND — Instructions de mise en place
+# BACKEND — Instructions de mise en place (version finale)
 # webstock.harmoniesalon.com
 
-## 1. Nouvelles migrations à créer
+## 1. Migrations à exécuter dans l'ordre
 
-Copier ces fichiers dans `database/migrations/` :
+```bash
+php artisan migrate
+```
 
-- `2026_04_27_000100_update_users_table.php`       → ajoute pseudo + role
-- `2026_04_27_000110_create_fournisseurs_table.php`
-- `2026_04_27_000120_create_types_produits_table.php` + pivot
-- `2026_04_27_000130_update_produits_table.php`    → ajoute type_id, actif, stock_cache
-- `2026_04_27_000140_create_prestations_charges_clients.php`
-- `2026_04_27_000150_update_arrivages_ventes.php`  → refonte multi-lignes + validation
-- `2026_04_27_000160_create_recettes_depenses_inventaires.php`
+Fichiers de migration à avoir dans database/migrations/ :
 
-## 2. Nouveaux Models à créer dans app/Models/
+- 0001_01_01_000000_create_users_table.php          (existant)
+- 2026_04_23_000100_create_produits_table.php        (existant — sera modifié)
+- 2026_04_23_000110_create_ventes_table.php          (existant — sera modifié)
+- 2026_04_23_000120_create_arrivages_table.php       (existant — sera modifié)
+- 2026_04_23_000130_create_historiques_table.php     (existant)
+- 2026_04_27_000100_update_users_table.php           (nouveau — pseudo + role)
+- 2026_04_27_000110_create_fournisseurs_table.php    (nouveau)
+- 2026_04_27_000120_create_types_produits_table.php  (nouveau + pivot)
+- 2026_04_27_000130_update_produits_table.php        (nouveau — type_id, actif, stock_cache)
+- 2026_04_27_000140_create_prestations_charges_clients.php (nouveau)
+- 2026_04_27_000150_update_arrivages_ventes.php      (nouveau — multi-lignes + validation)
+- 2026_04_27_000160_create_recettes_depenses_inventaires.php (nouveau)
+- 2026_04_28_000170_add_is_validated_to_depenses.php (nouveau — validation dépenses)
 
+## 2. Models à créer / remplacer dans app/Models/
+
+Remplacer :
+- User.php          → pseudo + role + HasApiTokens
+- Produit.php       → type_id, actif, stock_cache, recalculerStock()
+- Arrivage.php      → is_validated, lignes()
+- Vente.php         → is_validated, client_id, lignes()
+
+Créer :
 - Fournisseur.php
 - TypeProduit.php
 - Prestation.php
@@ -23,49 +40,41 @@ Copier ces fichiers dans `database/migrations/` :
 - ArrivageLigne.php
 - VenteLigne.php
 - Recette.php
-- Depense.php
+- Depense.php       → is_validated
 - Inventaire.php
 
-Remplacer :
-- Produit.php  → version avec type_id, actif, stock_cache, recalculerStock()
-- Arrivage.php → version avec is_validated, lignes
-- Vente.php    → version avec is_validated, client_id, lignes
+## 3. Controllers à créer dans app/Http/Controllers/
 
-## 3. Nouveaux Controllers dans app/Http/Controllers/
-
-- AuthController.php          → login par pseudo (pas email)
+- AuthController.php        → login par PSEUDO (pas email)
 - ProduitController.php
 - FournisseurController.php
 - TypeProduitController.php
-- ArrivageController.php      → store + valider
-- VenteController.php         → store + valider
-- RecetteController.php       → store + valider
-- DepenseController.php
-- InventaireController.php
+- ArrivageController.php    → store + update + valider
+- VenteController.php       → store + update + valider + prix_vente par ligne
+- RecetteController.php     → store + update + valider
+- DepenseController.php     → store + update + valider + is_validated
+- InventaireController.php  → store + update
 - PrestationController.php
 - ChargeController.php
 - ClientController.php
-- StatsController.php         → index + historique
+- StatsController.php       → stats du jour + état caisse cumulatif
 
 ## 4. Routes — remplacer routes/api.php
 
-Voir le fichier api.php fourni.
+Voir le fichier routes/api.php fourni.
+Nouvelles routes par rapport à la version précédente :
+  PUT  /arrivages/{id}
+  PUT  /ventes/{id}
+  PUT  /recettes/{id}
+  PUT  /depenses/{id}
+  PUT  /inventaires/{id}
+  POST /depenses/{id}/valider
 
-## 5. Installer Sanctum si pas déjà fait
+## 5. Installer Sanctum
 
 ```bash
 composer require laravel/sanctum
 php artisan vendor:publish --provider="Laravel\Sanctum\SanctumServiceProvider"
-```
-
-Dans `app/Models/User.php`, ajouter le trait :
-```php
-use Laravel\Sanctum\HasApiTokens;
-class User extends Authenticatable {
-    use HasApiTokens, HasFactory, Notifiable;
-    ...
-    protected $fillable = ['name', 'email', 'password', 'pseudo', 'role'];
-}
 ```
 
 ## 6. Lancer les migrations et le seeder
@@ -75,38 +84,31 @@ php artisan migrate
 php artisan db:seed
 ```
 
-Le seeder crée :
-- Compte admin  : pseudo=admin,    password=password
-- Compte caissier: pseudo=caissier, password=password
-- 3 fournisseurs, 4 types, 6 produits, 3 prestations, 5 charges, 2 clients
+Comptes créés par le seeder :
+  pseudo=admin     / password=password  (role: admin)
+  pseudo=caissier  / password=password  (role: caissier)
 
-## 7. Tester l'API
+## 7. Test rapide
 
 ```bash
 php artisan serve
-# → http://localhost:8000
 
-# Test login
+# Login avec PSEUDO
 curl -X POST http://localhost:8000/api/login \
   -H "Content-Type: application/json" \
   -d '{"pseudo":"admin","password":"password"}'
 
-# Test produits (avec token)
+# Récupérer les produits
 curl http://localhost:8000/api/produits \
   -H "Authorization: Bearer {token}"
 ```
 
-## 8. Brancher le frontend
+## 8. Brancher le frontend (quand tout est validé)
 
-Quand tout est OK, une seule modification dans :
-`frontend/src/api/client.js`
-
-Changer :
+Dans frontend/src/api/client.js, changer UNE ligne :
   export { api } from './mock'
-En :
+→
   export { api } from './http'
 
-Et décommenter dans `frontend/.env.local` :
+Dans frontend/.env.local, décommenter :
   VITE_API_URL=http://localhost:8000/api
-
-C'est tout. Aucune autre modification n'est nécessaire côté frontend.

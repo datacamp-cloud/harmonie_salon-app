@@ -20,7 +20,7 @@ class BusinessDataSeeder extends Seeder
         User::firstOrCreate(['pseudo' => 'admin'], [
             'name'     => 'Admin Salon',
             'email'    => 'admin@harmoniesalon.com',
-            'password' => Hash::make('password'),
+            'password' => Hash::make('admin@@2026_webstock'),
             'pseudo'   => 'admin',
             'role'     => 'admin',
         ]);
@@ -28,7 +28,7 @@ class BusinessDataSeeder extends Seeder
         User::firstOrCreate(['pseudo' => 'caissier'], [
             'name'     => 'Caissier',
             'email'    => 'caissier@harmoniesalon.com',
-            'password' => Hash::make('password'),
+            'password' => Hash::make('caissiere@@2026_webstock'),
             'pseudo'   => 'caissier',
             'role'     => 'caissier',
         ]);

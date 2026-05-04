@@ -1,17 +1,16 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, Package, Plus, Power, Tag, X } from 'lucide-react'
-import { api } from '../../api/mock'
+import { Loader2, Package, Pencil, Plus, Power, Tag, Trash2, X } from 'lucide-react'
+import { api } from '../../api/client'
 import { useToast } from '../../context/ToastContext'
+import ConfirmModal from '../../components/ConfirmModal'
 
 function Products() {
   const [showForm, setShowForm] = useState(false)
-  const [formData, setFormData] = useState({
-    nom: '',
-    typeId: '',
-    prix: '',
-    actif: true,
-  })
+  const [editModal, setEditModal] = useState(null) // null ou le produit à modifier
+  const [formData, setFormData] = useState({ nom: '', typeId: '', prix: '', actif: true })
+  const [editData, setEditData] = useState({ nom: '', typeId: '', prix: '' })
+  const [confirmDelete, setConfirmDelete] = useState(null)
   const queryClient = useQueryClient()
   const toast = useToast()
 
@@ -44,6 +43,16 @@ function Products() {
     },
   })
 
+  const deleteMutation = useMutation({
+    mutationFn: api.deleteProduit,
+    onSuccess: () => {
+      invalidateData()
+      setConfirmDelete(null)
+      toast.success('Produit supprime')
+    },
+    onError: (error) => toast.error(error.message || 'Erreur suppression'),
+  })
+
   const toggleMutation = useMutation({
     mutationFn: api.toggleProduitActif,
     onSuccess: () => {
@@ -53,6 +62,16 @@ function Products() {
     onError: (error) => {
       toast.error(error.message || 'Erreur lors de la mise a jour')
     },
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: api.updateProduit ?? (() => Promise.resolve()),
+    onSuccess: () => {
+      invalidateData()
+      setEditModal(null)
+      toast.success('Produit modifie avec succes')
+    },
+    onError: (error) => toast.error(error.message || 'Erreur modification'),
   })
 
   const activeTypes = typesProduits.filter((type) => type.actif)
@@ -69,13 +88,28 @@ function Products() {
     })
   }
 
+  const handleEditSubmit = (event) => {
+    event.preventDefault()
+    updateMutation.mutate({
+      id: editModal.id,
+      nom: editData.nom,
+      typeId: Number(editData.typeId),
+      prix: Number(editData.prix || 0),
+    })
+  }
+
+  const openEditModal = (produit) => {
+    setEditData({ nom: produit.nom, typeId: String(produit.typeId), prix: String(produit.prix) })
+    setEditModal(produit)
+  }
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-beige-900">Produits</h1>
           <p className="text-beige-600 mt-1">
-            Le stock est calcule automatiquement: arrivages - ventes + ecarts d inventaire.
+            Enregistrez vos différents produits
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -92,6 +126,62 @@ function Products() {
         </div>
       </div>
 
+      {/* Modal d'édition */}
+      {editModal && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-beige-900">Modifier le produit</h2>
+              <button type="button" onClick={() => setEditModal(null)}
+                className="p-2 text-beige-500 hover:text-beige-700 hover:bg-beige-100 rounded-lg">
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleEditSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-beige-700 mb-2">Libelle</label>
+                <input type="text" value={editData.nom}
+                  onChange={(e) => setEditData((c) => ({ ...c, nom: e.target.value }))}
+                  required
+                  className="w-full px-4 py-3 rounded-lg border border-beige-300 focus:border-beige-500 focus:ring-2 focus:ring-beige-200 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-beige-700 mb-2">Type de produit</label>
+                <select value={editData.typeId}
+                  onChange={(e) => setEditData((c) => ({ ...c, typeId: e.target.value }))}
+                  required
+                  className="w-full px-4 py-3 rounded-lg border border-beige-300 focus:border-beige-500 focus:ring-2 focus:ring-beige-200 outline-none bg-white">
+                  <option value="">-- Choisir un type --</option>
+                  {typesProduits.map((type) => (
+                    <option key={type.id} value={type.id}>{type.nom}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-beige-700 mb-2">Prix unitaire (FCFA)</label>
+                <input type="number" min="0" value={editData.prix}
+                  onChange={(e) => setEditData((c) => ({ ...c, prix: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-lg border border-beige-300 focus:border-beige-500 focus:ring-2 focus:ring-beige-200 outline-none"
+                  placeholder="0"
+                />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setEditModal(null)}
+                  className="flex-1 px-4 py-3 border border-beige-300 text-beige-700 rounded-lg hover:bg-beige-50 transition-colors">
+                  Annuler
+                </button>
+                <button type="submit" disabled={updateMutation.isPending}
+                  className="flex-1 px-4 py-3 bg-beige-900 text-white rounded-lg hover:bg-beige-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                  {updateMutation.isPending ? <><Loader2 size={18} className="animate-spin" /> Modification...</> : 'Enregistrer'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal d'ajout */}
       {showForm && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl">
@@ -242,14 +332,30 @@ function Products() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <button
-                        type="button"
-                        onClick={() => toggleMutation.mutate(produit.id)}
-                        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-beige-300 text-beige-700 hover:bg-white transition-colors"
-                      >
-                        <Power size={16} />
-                        {produit.actif ? 'Desactiver' : 'Activer'}
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        <button 
+                          type="button" 
+                          onClick={() => openEditModal(produit)}
+                          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-beige-300 text-beige-700 hover:bg-white transition-colors">
+                          <Pencil size={16} />
+                          
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleMutation.mutate(produit.id)}
+                          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-beige-300 text-beige-700 hover:bg-white transition-colors"
+                        >
+                          <Power size={16} />
+                          {/* {produit.actif ? 'Desactiver' : 'Activer'} */}
+                        </button>
+                        <button 
+                          type="button" 
+                          onClick={() => setConfirmDelete(produit.id)}
+                          className="px-3 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
+                          >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -263,6 +369,14 @@ function Products() {
           </div>
         )}
       </div>
+      <ConfirmModal
+        isOpen={confirmDelete !== null}
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={() => { deleteMutation.mutate(confirmDelete); setConfirmDelete(null) }}
+        isPending={deleteMutation.isPending}
+        title="Supprimer ce produit ?"
+        message="Le produit sera archive. Cette action est irreversible."
+      />
     </div>
   )
 }

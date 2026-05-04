@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, CheckCircle2, Loader2, Plus, ShoppingCart, Trash2 } from 'lucide-react'
-import { api } from '../api/mock'
+import { AlertTriangle, CheckCircle2, Loader2, Pencil, Plus, ShoppingCart, Trash2, X } from 'lucide-react'
+import { api } from '../api/client'
 import { useToast } from '../context/ToastContext'
+import { formatDate } from '../utils/date'
+import ConfirmModal from '../components/ConfirmModal'
 
-const createItem = () => ({ produitId: '', quantite: '' })
+const createItem = () => ({ produitId: '', quantite: '', prixVente: '' })
 
 function Sales() {
   const [formData, setFormData] = useState({
@@ -13,12 +15,18 @@ function Sales() {
     items: [createItem()],
     isValidated: false,
   })
+  const [editingId, setEditingId] = useState(null)
+  const [confirmValidate, setConfirmValidate] = useState(null)
+  const [confirmDelete, setConfirmDelete] = useState(null)
+  const [search, setSearch] = useState('')
+  const [period, setPeriod] = useState('all')
   const queryClient = useQueryClient()
   const toast = useToast()
 
+  // useQuery est utilisé pour renvoyer les données (faire des fetch) GET METHOD
   const { data: produits = [] } = useQuery({
-    queryKey: ['produits'],
-    queryFn: api.getProduits,
+    queryKey: ['produits'],   // tableau des données de "produits" dans le mock
+    queryFn: api.getProduits, //fetchdata
   })
 
   const { data: clients = [] } = useQuery({
@@ -35,6 +43,7 @@ function Sales() {
     queryKey: ['stats'],
     queryFn: api.getStats,
   })
+  // fin des fetch
 
   const activeProducts = produits.filter((p) => p.actif)
 
@@ -42,7 +51,8 @@ function Sales() {
     () =>
       formData.items.reduce((total, item) => {
         const produit = produits.find((p) => p.id === Number(item.produitId))
-        return total + (produit?.prix || 0) * Number(item.quantite || 0)
+        const prix = item.prixVente !== '' ? Number(item.prixVente) : (produit?.prix || 0)
+        return total + prix * Number(item.quantite || 0)
       }, 0),
     [formData.items, produits],
   )
@@ -56,19 +66,25 @@ function Sales() {
     [formData.items, produits],
   )
 
+  // useMutation utilisé pour les opérations PUT, POST ET DELETE
   const addMutation = useMutation({
     mutationFn: api.addVente,
     onSuccess: () => {
+
+      // Refresh each list ['ventes', 'produits', 'historique', 'stats' ] after a successful operation (addVente)
       queryClient.invalidateQueries({ queryKey: ['ventes'] })
       queryClient.invalidateQueries({ queryKey: ['produits'] })
       queryClient.invalidateQueries({ queryKey: ['historique'] })
       queryClient.invalidateQueries({ queryKey: ['stats'] })
+      // fin
+
       setFormData({
         date: new Date().toISOString().slice(0, 10),
         clientId: '',
         items: [createItem()],
         isValidated: false,
       })
+      
       toast.success('Vente enregistree avec succes')
     },
     onError: (error) => {
@@ -90,6 +106,63 @@ function Sales() {
     },
   })
 
+  const updateMutation = useMutation({
+    mutationFn: api.updateVente,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ventes'] })
+      queryClient.invalidateQueries({ queryKey: ['produits'] })
+      queryClient.invalidateQueries({ queryKey: ['historique'] })
+      queryClient.invalidateQueries({ queryKey: ['stats'] })
+      setEditingId(null)
+      setFormData({ date: new Date().toISOString().slice(0, 10), clientId: '', items: [createItem()], isValidated: false })
+      toast.success('Vente modifiee avec succes')
+    },
+    onError: (error) => toast.error(error.message || 'Erreur modification'),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: api.deleteVente,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ventes'] })
+      queryClient.invalidateQueries({ queryKey: ['produits'] })
+      queryClient.invalidateQueries({ queryKey: ['historique'] })
+      queryClient.invalidateQueries({ queryKey: ['stats'] })
+      toast.success('Vente supprimee')
+    },
+    onError: (error) => toast.error(error.message || 'Erreur suppression'),
+  })
+
+  const handleEdit = (vente) => {
+    setEditingId(vente.id)
+    setFormData({
+      date: vente.date,
+      clientId: vente.clientId ? String(vente.clientId) : '',
+      items: vente.items.map((i) => ({
+        produitId: String(i.produitId),
+        quantite: String(i.quantite),
+        prixVente: String(i.prixUnitaire),
+      })),
+      isValidated: false,
+    })
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const handleCancelEdit = () => {
+    setEditingId(null)
+    setFormData({ date: new Date().toISOString().slice(0, 10), clientId: '', items: [createItem()], isValidated: false })
+  }
+
+  // Quand on sélectionne un produit, pré-remplit le prix de vente
+  const handleProduitChange = (index, produitId) => {
+    const produit = produits.find((p) => p.id === Number(produitId))
+    setFormData((current) => ({
+      ...current,
+      items: current.items.map((item, i) =>
+        i === index ? { ...item, produitId, prixVente: produit ? String(produit.prix) : '' } : item
+      ),
+    }))
+  }
+
   const handleItemChange = (index, field, value) => {
     setFormData((current) => ({
       ...current,
@@ -107,18 +180,42 @@ function Sales() {
 
   const handleSubmit = (event) => {
     event.preventDefault()
-    addMutation.mutate({
+    const payload = {
       date: formData.date,
       clientId: formData.clientId ? Number(formData.clientId) : null,
       items: formData.items.map((item) => ({
         produitId: Number(item.produitId),
         quantite: Number(item.quantite),
+        prixVente: item.prixVente !== '' ? Number(item.prixVente) : null,
       })),
-      isValidated: formData.isValidated,
-    })
+    }
+    if (editingId) {
+      updateMutation.mutate({ id: editingId, ...payload })
+    } else {
+      addMutation.mutate({ ...payload, isValidated: formData.isValidated })
+    }
   }
 
   const lowStockProducts = produits.filter((p) => p.stock > 0 && p.stock <= 5)
+
+  const filteredVentes = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10)
+    const week  = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    const month = new Date().toISOString().slice(0, 7)
+    return [...ventes]
+      .filter((v) => {
+        const matchSearch = !search ||
+          v.clientNom?.toLowerCase().includes(search.toLowerCase()) ||
+          v.items?.some((i) => i.produitNom?.toLowerCase().includes(search.toLowerCase()))
+        const matchPeriod =
+          period === 'all' ||
+          (period === 'today' && v.date === today) ||
+          (period === 'week'  && v.date >= week) ||
+          (period === 'month' && v.date.startsWith(month))
+        return matchSearch && matchPeriod
+      })
+      .reverse()
+  }, [ventes, search, period])
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -142,7 +239,7 @@ function Sales() {
         <div className="bg-white rounded-xl border border-beige-200 p-6">
           <h2 className="text-lg font-semibold text-beige-900 mb-2 flex items-center gap-2">
             <ShoppingCart size={20} className="text-beige-600" />
-            Nouvelle vente
+            {editingId ? 'Modifier la vente' : 'Nouvelle vente'}
           </h2>
           <p className="text-sm text-beige-600 mb-6">
             Verifiez le stock disponible avant de valider la sortie.
@@ -203,12 +300,13 @@ function Sales() {
                 return (
                   <div
                     key={`${index}-${item.produitId}`}
-                    className="rounded-xl border border-beige-200 bg-beige-50 p-4 space-y-3"
+                    className="rounded-xl border border-beige-200 bg-beige-10 p-4 space-y-3"
                   >
-                    <div className="grid grid-cols-1 md:grid-cols-[1fr_160px_auto] gap-3">
+                    {/* Ligne 1 : produit + supprimer */}
+                    <div className="grid grid-cols-[1fr_auto] gap-3">
                       <select
                         value={item.produitId}
-                        onChange={(e) => handleItemChange(index, 'produitId', e.target.value)}
+                        onChange={(e) => handleProduitChange(index, e.target.value)}
                         required
                         className="w-full px-4 py-3 rounded-lg border border-beige-300 focus:border-beige-500 focus:ring-2 focus:ring-beige-200 outline-none bg-white"
                       >
@@ -219,17 +317,6 @@ function Sales() {
                           </option>
                         ))}
                       </select>
-
-                      <input
-                        type="number"
-                        min="1"
-                        value={item.quantite}
-                        onChange={(e) => handleItemChange(index, 'quantite', e.target.value)}
-                        required
-                        className="w-full px-4 py-3 rounded-lg border border-beige-300 focus:border-beige-500 focus:ring-2 focus:ring-beige-200 outline-none"
-                        placeholder="Quantite"
-                      />
-
                       <button
                         type="button"
                         onClick={() => removeLine(index)}
@@ -240,13 +327,48 @@ function Sales() {
                       </button>
                     </div>
 
+                    
+                      <div className="bg-red">
+                        <label className="block text-xs text-beige-600 mb-1">Quantite</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={item.quantite}
+                          onChange={(e) => handleItemChange(index, 'quantite', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 rounded-lg border border-beige-300 focus:border-beige-500 focus:ring-2 focus:ring-beige-200 outline-none"
+                          placeholder="0"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-beige-600 mb-1">Prix de vente (FCFA)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={item.prixVente}
+                          onChange={(e) => handleItemChange(index, 'prixVente', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 rounded-lg border border-beige-300 focus:border-beige-500 focus:ring-2 focus:ring-beige-200 outline-none"
+                          placeholder="0"
+                        />
+                        {produit && item.prixVente !== '' && Number(item.prixVente) !== produit.prix && (
+                          <p className={`text-xs mt-1 ${Number(item.prixVente) > produit.prix ? 'text-green-600' : 'text-amber-600'}`}>
+                            {Number(item.prixVente) > produit.prix ? '+' : ''}
+                            {(Number(item.prixVente) - produit.prix).toLocaleString('fr-FR')} FCFA / tarif
+                          </p>
+                        )}
+                      </div>
+              
+
                     {produit && (
                       <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
                         <span className="text-beige-600">
-                          Stock disponible : <strong className="text-beige-900">{produit.stock}</strong>
+                          Stock : <strong className="text-beige-900">{produit.stock}</strong>
                         </span>
                         <span className="text-beige-600">
-                          Sous-total : <strong className="text-beige-900">{(produit.prix * quantity).toLocaleString('fr-FR')} FCFA</strong>
+                          Sous-total : <strong className="text-beige-900">
+                            {((item.prixVente !== '' ? Number(item.prixVente) : produit.prix) * quantity).toLocaleString('fr-FR')} FCFA
+                          </strong>
                         </span>
                       </div>
                     )}
@@ -262,49 +384,60 @@ function Sales() {
               })}
             </div>
 
-            {/* Validation */}
+            {/* Validation — masquée en mode édition */}
+            {!editingId && (
             <label className="flex items-center gap-3 rounded-lg border border-beige-200 bg-beige-50 px-4 py-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.isValidated}
+              <input type="checkbox" checked={formData.isValidated}
                 onChange={(e) => setFormData((c) => ({ ...c, isValidated: e.target.checked }))}
-                className="rounded border-beige-300"
-              />
+                className="rounded border-beige-300" />
               <div>
-                <span className="text-sm font-medium text-beige-800">
-                  Valider la vente après verification
-                </span>
-                <p className="text-xs text-beige-500 mt-0.5">
-                  Une fois validee, la vente ne peut plus etre modifiee.
-                </p>
+                <span className="text-sm font-medium text-beige-800">Valider la vente</span>
+                <p className="text-xs text-beige-500 mt-0.5">Une fois validee, la vente ne peut plus etre modifiee.</p>
               </div>
             </label>
+            )}
 
-            <button
-              type="submit"
-              disabled={addMutation.isPending || (formData.isValidated && hasShortage)}
-              className="w-full px-4 py-3 bg-beige-900 text-white rounded-lg hover:bg-beige-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {addMutation.isPending ? (
-                <>
-                  <Loader2 size={18} className="animate-spin" />
-                  Enregistrement...
-                </>
-              ) : (
-                'Enregistrer la vente'
+            <div className="flex gap-3">
+              {editingId && (
+                <button type="button" onClick={handleCancelEdit}
+                  className="flex-1 px-4 py-3 border border-beige-300 text-beige-700 rounded-lg hover:bg-beige-50 transition-colors flex items-center justify-center gap-2">
+                  <X size={18} /> Annuler
+                </button>
               )}
-            </button>
+              <button type="submit"
+                disabled={addMutation.isPending || updateMutation.isPending || (!editingId && formData.isValidated && hasShortage)}
+                className="flex-1 px-4 py-3 bg-beige-900 text-white rounded-lg hover:bg-beige-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                {(addMutation.isPending || updateMutation.isPending) ? (
+                  <><Loader2 size={18} className="animate-spin" /> Enregistrement...</>
+                ) : (
+                  editingId ? 'Enregistrer les modifications' : 'Enregistrer la vente'
+                )}
+              </button>
+            </div>
           </form>
         </div>
 
         {/* Historique */}
         <div className="bg-white rounded-xl border border-beige-200 p-6">
-          <div className="flex items-center justify-between gap-3 mb-6">
+          <div className="flex items-center justify-between gap-3 mb-4">
             <div>
               <h2 className="text-lg font-semibold text-beige-900">Dernieres ventes</h2>
-              {/* <p className="text-sm text-beige-600">Chaque vente regroupe ses lignes produits.</p> */}
+              <p className="text-sm text-beige-600">Liste des dernières ventes effectuees</p>
             </div>
-            <span className="text-sm text-beige-400">{ventes.length} document(s)</span>
+            <span className="text-sm text-beige-400">{filteredVentes.length}/{ventes.length}</span>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2 mb-4">
+            <input type="text" placeholder="Rechercher client ou produit..."
+              value={search} onChange={(e) => setSearch(e.target.value)}
+              className="flex-1 px-3 py-2 text-sm border border-beige-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-beige-300" />
+            <select value={period} onChange={(e) => setPeriod(e.target.value)}
+              className="px-3 py-2 text-sm border border-beige-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-beige-300">
+              <option value="all">Toute la periode</option>
+              <option value="today">Aujourd hui</option>
+              <option value="week">7 derniers jours</option>
+              <option value="month">Ce mois</option>
+            </select>
           </div>
 
           {isLoading ? (
@@ -313,7 +446,7 @@ function Sales() {
             </div>
           ) : ventes.length > 0 ? (
             <ul className="space-y-3 max-h-[40rem] overflow-y-auto pr-1">
-              {[...ventes].reverse().map((vente) => (
+              {filteredVentes.map((vente) => (
                 <li key={vente.id} className="rounded-xl border border-beige-200 bg-beige-50 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
@@ -326,9 +459,22 @@ function Sales() {
                     </div>
                     <div className="flex items-center gap-2">
                       {!vente.isValidated && (
+                        <button type="button" onClick={() => handleEdit(vente)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-beige-300 text-beige-700 text-xs hover:bg-white transition-colors">
+                          <Pencil size={13} /> Modifier
+                        </button>
+                      )}
+                      {!vente.isValidated && (
+                        <button type="button" onClick={() => setConfirmDelete(vente.id)}
+                          disabled={deleteMutation.isPending}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-xs transition-colors disabled:opacity-50">
+                          <Trash2 size={13} /> Supprimer
+                        </button>
+                      )}
+                      {!vente.isValidated && (
                         <button
                           type="button"
-                          onClick={() => validateMutation.mutate(vente.id)}
+                          onClick={() => setConfirmValidate(vente.id)}
                           disabled={validateMutation.isPending}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 text-white text-xs font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
                         >
@@ -352,7 +498,7 @@ function Sales() {
                     {vente.items.map((item) => (
                       <li
                         key={`${vente.id}-${item.produitId}`}
-                        className="flex items-center justify-between text-sm text-beige-700"
+                        className="flex items-center justify-between font-semibold text-sm text-beige-900"
                       >
                         <span>{item.produitNom}</span>
                         <span>{item.quantite} × {item.prixUnitaire.toLocaleString('fr-FR')} FCFA</span>
@@ -360,7 +506,7 @@ function Sales() {
                     ))}
                   </ul>
 
-                  <div className="mt-2 text-xs text-beige-400">{vente.date}</div>
+                  <div className="mt-2 text-xs text-beige-400">{formatDate(vente.date)}</div>
                 </li>
               ))}
             </ul>
@@ -371,6 +517,22 @@ function Sales() {
           )}
         </div>
       </div>
+      <ConfirmModal
+        isOpen={confirmValidate !== null}
+        onCancel={() => setConfirmValidate(null)}
+        onConfirm={() => { validateMutation.mutate(confirmValidate); setConfirmValidate(null) }}
+        isPending={validateMutation.isPending}
+        title="Valider la vente ?"
+        message="Cette action est irreversible. Une fois validee, le stock sera deduit et la vente ne pourra plus etre modifiee."
+      />
+      <ConfirmModal
+        isOpen={confirmDelete !== null}
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={() => { deleteMutation.mutate(confirmDelete); setConfirmDelete(null) }}
+        isPending={deleteMutation.isPending}
+        title="Supprimer cette vente ?"
+        message="La vente sera archivee. Cette action est irreversible."
+      />
     </div>
   )
 }

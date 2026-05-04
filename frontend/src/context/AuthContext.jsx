@@ -7,12 +7,17 @@ export function AuthProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    // Check for existing session in localStorage
-    const storedUser = localStorage.getItem('webstock_user')
-    if (storedUser) {
-      setUser(JSON.parse(storedUser))
+    try {
+      const storedUser = localStorage.getItem('webstock_user')
+      if (storedUser && storedUser !== 'undefined') {
+        setUser(JSON.parse(storedUser))
+      }
+    } catch {
+      localStorage.removeItem('webstock_user')
+      localStorage.removeItem('webstock_token')
+    } finally {
+      setIsLoading(false)
     }
-    setIsLoading(false)
   }, [])
 
   const login = (userData) => {
@@ -23,6 +28,7 @@ export function AuthProvider({ children }) {
   const logout = () => {
     setUser(null)
     localStorage.removeItem('webstock_user')
+    localStorage.removeItem('webstock_token')
   }
 
   return (

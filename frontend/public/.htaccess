@@ -1,10 +1,4 @@
 Options -MultiViews
 RewriteEngine On
-RewriteBase /
-
-# Laisser passer les fichiers et dossiers existants
 RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-
-# Tout rediriger vers index.html (SPA routing)
-RewriteRule ^ index.html [QSA,L]
+RewriteRule ^ index.html [QL,L]

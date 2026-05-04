@@ -1,6 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, ClipboardList, Package, Receipt, ShoppingCart, TrendingUp, Wallet } from 'lucide-react'
-import { api } from '../api/mock'
+import { api } from '../api/client'
+import { useAuth } from '../context/AuthContext'
+import { useToast } from '../context/ToastContext'
+import { useEffect } from 'react'
 
 function Dashboard() {
   const { data: stats, isLoading } = useQuery({
@@ -11,6 +14,20 @@ function Dashboard() {
   const { data: historique = [], isLoading: historyLoading } = useQuery({
     queryKey: ['historique'],
     queryFn: api.getHistorique,
+  })
+
+  const { user } = useAuth()
+  const toast = useToast()
+
+  useEffect(() => {
+    if (user?.pseudo) {
+      toast.success(`Bonjour ${user.pseudo} 🌟`)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const today = new Date().toLocaleDateString('fr-FR', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
   })
 
   const recentEvents = [...historique]
@@ -28,19 +45,11 @@ function Dashboard() {
   return (
     <div className="max-w-6xl mx-auto space-y-6">
 
-      {/* En-tête avec logo */}
+      {/* En-tête */}
       <div className="flex items-center gap-4">
-        {/* <img
-          src="/logo.jpg"
-          alt="Harmonie Salon"
-          className="h-14 w-14 object-contain rounded-xl border border-beige-200 bg-white p-1 hidden sm:block"
-          onError={(e) => { e.target.style.display = 'none' }}
-        /> */}
         <div>
           <h1 className="text-2xl font-semibold text-beige-900">Tableau de bord</h1>
-          {/* <p className="text-beige-500 text-sm mt-0.5">
-            Vue rapide du salon — stock calcule, activite et depenses
-          </p> */}
+          <p className="text-sm text-beige-500 mt-0.5 capitalize">{today}</p>
         </div>
       </div>
 
@@ -59,16 +68,16 @@ function Dashboard() {
           color="bg-violet-50 text-violet-700"
         />
         <StatCard
-          title="Depenses du mois"
-          value={`${stats?.depensesMois?.toLocaleString('fr-FR') || 0} FCFA`}
+          title="Depenses du jour"
+          value={`${stats?.depensesJour?.toLocaleString('fr-FR') || 0} FCFA`}
           icon={Wallet}
           color="bg-rose-50 text-rose-700"
         />
         <StatCard
-          title="Etat de caisse (mois)"
+          title="Etat de caisse"
           value={`${stats?.etatCaisse?.toLocaleString('fr-FR') || 0} FCFA`}
           icon={TrendingUp}
-          color={stats?.etatCaisse >= 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}
+          color={!stats || stats.etatCaisse >= 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}
         />
       </div>
 

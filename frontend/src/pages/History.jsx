@@ -1,21 +1,23 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ClipboardList, Clock, Package, Search, ShoppingCart, TruckIcon, Wallet } from 'lucide-react'
-import { api } from '../api/mock'
+import { ClipboardList, Clock, Package, Receipt, Search, ShoppingCart, TruckIcon, Wallet } from 'lucide-react'
+import { api } from '../api/client'
+// import { formatDate } from '../utils/date'
 
 const FILTERS = [
   { id: 'all', label: 'Tous' },
   { id: 'vente', label: 'Ventes' },
+  { id: 'recette', label: 'Recettes' },
   { id: 'arrivage', label: 'Arrivages' },
+  { id: 'depense', label: 'Depenses' },
   { id: 'inventaire', label: 'Inventaires' },
   { id: 'produit', label: 'Produits' },
-  { id: 'depense', label: 'Depenses' },
 ]
 
 function getEventType(item) {
   const titre = item.titre.toLowerCase()
-
   if (titre.startsWith('vente')) return 'vente'
+  if (titre.startsWith('recette')) return 'recette'
   if (titre.startsWith('arrivage')) return 'arrivage'
   if (titre.startsWith('inventaire')) return 'inventaire'
   if (titre.startsWith('nouveau produit') || titre.startsWith('produit mis')) return 'produit'
@@ -35,6 +37,7 @@ function History() {
   const counts = useMemo(() => ({
     all: data.length,
     vente: data.filter((item) => getEventType(item) === 'vente').length,
+    recette: data.filter((item) => getEventType(item) === 'recette').length,
     arrivage: data.filter((item) => getEventType(item) === 'arrivage').length,
     inventaire: data.filter((item) => getEventType(item) === 'inventaire').length,
     produit: data.filter((item) => getEventType(item) === 'produit').length,
@@ -71,13 +74,14 @@ function History() {
         </span>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
         <MetricCard label="Toutes les actions" value={counts.all} />
         <MetricCard label="Ventes" value={counts.vente} icon={ShoppingCart} tone="success" />
+        <MetricCard label="Recettes" value={counts.recette} icon={Receipt} tone="success" />
         <MetricCard label="Arrivages" value={counts.arrivage} icon={TruckIcon} />
+        <MetricCard label="Depenses" value={counts.depense} icon={Wallet} tone="danger" />
         <MetricCard label="Inventaires" value={counts.inventaire} icon={ClipboardList} tone="warning" />
         <MetricCard label="Produits" value={counts.produit} icon={Package} tone="warning" />
-        <MetricCard label="Depenses" value={counts.depense} icon={Wallet} tone="danger" />
       </div>
 
       <div className="bg-white rounded-xl border border-beige-200 p-4 md:p-5 space-y-4">
@@ -169,6 +173,13 @@ function MetricCard({ label, value, icon: Icon = Clock, tone = 'default' }) {
 function HistoryCard({ item }) {
   const type = getEventType(item)
   const styles = {
+    recette: {
+      label: 'Recette',
+      icon: Receipt,
+      container: 'border-violet-200 bg-violet-50',
+      iconBox: 'bg-white text-violet-700',
+      badge: 'bg-violet-100 text-violet-700',
+    },
     vente: {
       label: 'Vente',
       icon: ShoppingCart,

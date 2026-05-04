@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ClipboardList, Loader2, Plus } from 'lucide-react'
-import { api } from '../api/mock'
+import { ClipboardList, Loader2, Pencil, Plus, X } from 'lucide-react'
+import { api } from '../api/client'
 import { useToast } from '../context/ToastContext'
+import { formatDate } from '../utils/date'
 
 function Inventory() {
   const [formData, setFormData] = useState({
@@ -11,6 +12,7 @@ function Inventory() {
     quantitePhysique: '',
     isValidated: true,
   })
+  const [editingId, setEditingId] = useState(null)
   const toast = useToast()
   const queryClient = useQueryClient()
 
@@ -48,6 +50,36 @@ function Inventory() {
     },
   })
 
+  const updateMutation = useMutation({
+    mutationFn: api.updateInventaire,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventaires'] })
+      queryClient.invalidateQueries({ queryKey: ['produits'] })
+      queryClient.invalidateQueries({ queryKey: ['historique'] })
+      queryClient.invalidateQueries({ queryKey: ['stats'] })
+      setEditingId(null)
+      setFormData({ date: new Date().toISOString().slice(0, 10), produitId: '', quantitePhysique: '', isValidated: true })
+      toast.success('Inventaire modifie avec succes')
+    },
+    onError: (error) => toast.error(error.message || 'Erreur modification'),
+  })
+
+  const handleEdit = (inventaire) => {
+    setEditingId(inventaire.id)
+    setFormData({
+      date: inventaire.date,
+      produitId: String(inventaire.produitId),
+      quantitePhysique: String(inventaire.quantitePhysique),
+      isValidated: inventaire.isValidated,
+    })
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const handleCancelEdit = () => {
+    setEditingId(null)
+    setFormData({ date: new Date().toISOString().slice(0, 10), produitId: '', quantitePhysique: '', isValidated: true })
+  }
+
   const monthlyCount = useMemo(
     () => inventaires.filter((inventaire) => inventaire.date.startsWith(new Date().toISOString().slice(0, 7))).length,
     [inventaires],
@@ -56,12 +88,21 @@ function Inventory() {
   const handleSubmit = (event) => {
     event.preventDefault()
 
-    addMutation.mutate({
-      date: formData.date,
-      produitId: Number(formData.produitId),
-      quantitePhysique: Number(formData.quantitePhysique),
-      isValidated: formData.isValidated,
-    })
+    if (editingId) {
+      updateMutation.mutate({
+        id: editingId,
+        date: formData.date,
+        produitId: Number(formData.produitId),
+        quantitePhysique: Number(formData.quantitePhysique),
+      })
+    } else {
+      addMutation.mutate({
+        date: formData.date,
+        produitId: Number(formData.produitId),
+        quantitePhysique: Number(formData.quantitePhysique),
+        isValidated: formData.isValidated,
+      })
+    }
   }
 
   return (
@@ -83,7 +124,7 @@ function Inventory() {
         <div className="bg-white rounded-xl border border-beige-200 p-6">
           <h2 className="text-lg font-semibold text-beige-900 mb-2 flex items-center gap-2">
             <ClipboardList size={20} className="text-beige-600" />
-            Nouvel inventaire
+            {editingId ? 'Modifier l inventaire' : 'Nouvel inventaire'}
           </h2>
           <p className="text-sm text-beige-600 mb-6">
             Saisissez la quantite physique observee. L ecart ajuste ensuite le stock calcule.
@@ -153,23 +194,25 @@ function Inventory() {
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={addMutation.isPending || !selectedProduct}
-              className="w-full px-4 py-3 bg-beige-900 text-white rounded-lg hover:bg-beige-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {addMutation.isPending ? (
-                <>
-                  <Loader2 size={18} className="animate-spin" />
-                  Enregistrement...
-                </>
-              ) : (
-                <>
-                  <Plus size={18} />
-                  Enregistrer l inventaire
-                </>
+            <div className="flex gap-3">
+              {editingId && (
+                <button type="button" onClick={handleCancelEdit}
+                  className="flex-1 px-4 py-3 border border-beige-300 text-beige-700 rounded-lg hover:bg-beige-50 transition-colors flex items-center justify-center gap-2">
+                  <X size={18} /> Annuler
+                </button>
               )}
-            </button>
+              <button
+                type="submit"
+                disabled={(addMutation.isPending || updateMutation.isPending) || !selectedProduct}
+                className="flex-1 px-4 py-3 bg-beige-900 text-white rounded-lg hover:bg-beige-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {(addMutation.isPending || updateMutation.isPending) ? (
+                  <><Loader2 size={18} className="animate-spin" /> Enregistrement...</>
+                ) : (
+                  <><Plus size={18} />{editingId ? 'Enregistrer les modifications' : 'Enregistrer l inventaire'}</>
+                )}
+              </button>
+            </div>
           </form>
         </div>
 
@@ -197,21 +240,29 @@ function Inventory() {
                         Stock theorique {inventaire.stockTheorique} | Quantite comptee {inventaire.quantitePhysique}
                       </p>
                     </div>
-                    <span
-                      className={`px-3 py-1 rounded-full text-sm font-medium ${
-                        inventaire.ecart === 0
-                          ? 'bg-beige-100 text-beige-700'
-                          : inventaire.ecart > 0
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-amber-100 text-amber-800'
-                      }`}
-                    >
-                      Ecart {inventaire.ecart > 0 ? `+${inventaire.ecart}` : inventaire.ecart}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {!inventaire.isValidated && (
+                        <button type="button" onClick={() => handleEdit(inventaire)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-beige-300 text-beige-700 text-xs hover:bg-white transition-colors">
+                          <Pencil size={13} /> Modifier
+                        </button>
+                      )}
+                      <span
+                        className={`px-3 py-1 rounded-full text-sm font-medium ${
+                          inventaire.ecart === 0
+                            ? 'bg-beige-100 text-beige-700'
+                            : inventaire.ecart > 0
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-amber-100 text-amber-800'
+                        }`}
+                      >
+                        Ecart {inventaire.ecart > 0 ? `+${inventaire.ecart}` : inventaire.ecart}
+                      </span>
+                    </div>
                   </div>
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-beige-500">
                     <span>{inventaire.isValidated ? 'Valide' : 'En attente'}</span>
-                    <span>{inventaire.date}</span>
+                    <span>{formatDate(inventaire.date)}</span>
                   </div>
                 </li>
               ))}

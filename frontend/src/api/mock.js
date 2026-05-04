@@ -1,9 +1,9 @@
 const todayIso = new Date().toISOString()
 
 export let fournisseurs = [
-  { id: 1, nom: 'Beauty Source', actif: true },
-  { id: 2, nom: 'Pro Hair Supply', actif: true },
-  { id: 3, nom: 'Esthetique Depot', actif: false },
+  { id: 1, nom: 'Beauty Source', actif: true, telephone: '07 00 11 22 33', localisation: 'Abidjan Plateau' },
+  { id: 2, nom: 'Pro Hair Supply', actif: true, telephone: '05 44 55 66 77', localisation: 'Abidjan Cocody' },
+  { id: 3, nom: 'Esthetique Depot', actif: false, telephone: '', localisation: '' },
 ]
 
 export let typesProduits = [
@@ -28,8 +28,8 @@ export let charges = [
 ]
 
 export let clients = [
-  { id: 1, nom: 'Marie Kouassi', telephone: '07 00 11 22 33' },
-  { id: 2, nom: 'Aicha Diallo', telephone: '' },
+  { id: 1, nom: 'Marie Kouassi', telephone: '07 00 11 22 33', localisation: 'Abidjan Yopougon', actif: true },
+  { id: 2, nom: 'Aicha Diallo', telephone: '', localisation: '', actif: true },
 ]
 
 export let produits = [
@@ -83,8 +83,8 @@ export let inventaires = [
 ]
 
 export let depenses = [
-  { id: 1, date: '2026-04-22', chargeId: 1, montant: 12000, notes: 'Renouvellement du linge cabine' },
-  { id: 2, date: '2026-04-24', chargeId: 2, montant: 18000, notes: '' },
+  { id: 1, date: '2026-04-22', chargeId: 1, montant: 12000, notes: 'Renouvellement du linge cabine', isValidated: true },
+  { id: 2, date: '2026-04-24', chargeId: 2, montant: 18000, notes: '', isValidated: false },
 ]
 
 export let recettes = [
@@ -120,8 +120,15 @@ function normalizeItems(items) {
     const produitId = Number(item.produitId)
     const quantite = Number(item.quantite)
     const fournisseurId = Number(item.fournisseurId) || null
+    const prixVente = item.prixVente != null ? Number(item.prixVente) : null
     if (!produitId || quantite <= 0) return
-    merged.set(produitId, { produitId, quantite: (merged.get(produitId)?.quantite || 0) + quantite, fournisseurId })
+    const existing = merged.get(produitId)
+    merged.set(produitId, {
+      produitId,
+      quantite: (existing?.quantite || 0) + quantite,
+      fournisseurId,
+      ...(prixVente != null ? { prixVente } : {}),
+    })
   })
   return [...merged.values()]
 }
@@ -146,7 +153,8 @@ function enrichProduit(p) {
 function enrichItems(items) {
   return items.map((item) => {
     const p = findProduit(item.produitId)
-    const prixUnitaire = p?.prix || 0
+    // Utilise le prix de vente saisi si fourni, sinon le prix catalogue du produit
+    const prixUnitaire = item.prixVente != null ? item.prixVente : (p?.prix || 0)
     return { ...item, produitNom: p?.nom || 'Produit inconnu', prixUnitaire, total: prixUnitaire * item.quantite }
   })
 }
@@ -171,7 +179,7 @@ function enrichInventaire(inv) {
 }
 
 function enrichDepense(d) {
-  return { ...d, chargeNom: findCharge(d.chargeId)?.nom || '-' }
+  return { ...d, chargeNom: findCharge(d.chargeId)?.nom || '-', isValidated: d.isValidated ?? false }
 }
 
 function findPrestation(id) { return prestations.find((p) => p.id === id) }
@@ -205,26 +213,29 @@ function nameExists(col, nom) { return col.some((i) => i.nom.toLowerCase() === n
 export function getStats() {
   const stocks = computeStocks()
   const today = new Date().toISOString().slice(0, 10)
-  const month = new Date().toISOString().slice(0, 7)
   const enrichedProducts = produits.map(enrichProduit)
+
+  // Stats du jour
   const ventesDuJour = ventes.filter((v) => v.isValidated && v.date === today).map(enrichVente)
   const recettesDuJour = recettes.filter((r) => r.isValidated && r.date === today)
-  const ventesMois = ventes.filter((v) => v.isValidated && v.date.startsWith(month)).map(enrichVente)
-  const totalVentesMois = ventesMois.reduce((t, v) => t + v.total, 0)
-  const totalRecettesMois = recettes.filter((r) => r.isValidated && r.date.startsWith(month)).reduce((t, r) => t + r.prixApplique, 0)
-  const totalDepensesMois = depenses.filter((d) => d.date.startsWith(month)).reduce((t, d) => t + d.montant, 0)
+  const depensesJour = depenses.filter((d) => d.isValidated && d.date === today).reduce((t, d) => t + d.montant, 0)
+
+  // État de caisse — cumul total depuis le début (uniquement validés)
+  const totalVentesAll = ventes.filter((v) => v.isValidated).map(enrichVente).reduce((t, v) => t + v.total, 0)
+  const totalRecettesAll = recettes.filter((r) => r.isValidated).reduce((t, r) => t + r.prixApplique, 0)
+  const totalDepensesAll = depenses.filter((d) => d.isValidated).reduce((t, d) => t + d.montant, 0)
+
   return {
     ventesJour: ventesDuJour.reduce((t, v) => t + v.total, 0),
     nombreVentesJour: ventesDuJour.length,
     recettesJour: recettesDuJour.reduce((t, r) => t + r.prixApplique, 0),
     nombreRecettesJour: recettesDuJour.length,
-    etatCaisse: totalVentesMois + totalRecettesMois - totalDepensesMois,
+    depensesJour,
+    etatCaisse: totalVentesAll + totalRecettesAll - totalDepensesAll,
     produitsStockFaible: enrichedProducts.filter((p) => p.actif && p.stock <= 5),
     totalProduits: enrichedProducts.length,
     totalProduitsActifs: enrichedProducts.filter((p) => p.actif).length,
     stockTotal: Object.values(stocks).reduce((t, v) => t + v, 0),
-    depensesMois: totalDepensesMois,
-    recettesMois: totalRecettesMois,
   }
 }
 
@@ -241,6 +252,13 @@ export const api = {
     produits = [...produits, p]
     return Promise.resolve(enrichProduit(p))
   },
+  deleteProduit: (id) => {
+    const p = produits.find((i) => i.id === id)
+    if (!p) return Promise.reject(new Error('Introuvable'))
+    produits = produits.filter((i) => i.id !== id)
+    return Promise.resolve({ message: 'Produit supprime' })
+  },
+
   toggleProduitActif: (id) => {
     let u = null
     produits = produits.map((p) => { if (p.id !== id) return p; u = { ...p, actif: !p.actif }; return u })
@@ -248,12 +266,30 @@ export const api = {
     return Promise.resolve(enrichProduit(u))
   },
 
+  updateProduit: ({ id, nom, typeId, prix }) => {
+    const t = nom?.trim()
+    if (!t) return Promise.reject(new Error('Nom obligatoire'))
+    if (!findType(typeId)) return Promise.reject(new Error('Type invalide'))
+    let updated = null
+    produits = produits.map((p) => {
+      if (p.id !== id) return p
+      updated = { ...p, nom: t, typeId: Number(typeId), prix: Number(prix || 0) }
+      return updated
+    })
+    if (!updated) return Promise.reject(new Error('Produit introuvable'))
+    return Promise.resolve(enrichProduit(updated))
+  },
+  deleteProduit: (id) => {
+    produits = produits.filter((p) => p.id !== id)
+    return Promise.resolve({ message: 'Produit supprime' })
+  },
+
   getFournisseurs: () => Promise.resolve([...fournisseurs]),
-  addFournisseur: ({ nom }) => {
+  addFournisseur: ({ nom, telephone, localisation }) => {
     const t = nom?.trim()
     if (!t) return Promise.reject(new Error('Nom obligatoire'))
     if (nameExists(fournisseurs, t)) return Promise.reject(new Error('Existe deja'))
-    const f = { id: nextId(fournisseurs), nom: t, actif: true }
+    const f = { id: nextId(fournisseurs), nom: t, actif: true, telephone: telephone?.trim() || '', localisation: localisation?.trim() || '' }
     fournisseurs = [...fournisseurs, f]
     return Promise.resolve(f)
   },
@@ -319,11 +355,11 @@ export const api = {
   },
 
   getClients: () => Promise.resolve([...clients]),
-  addClient: ({ nom, telephone }) => {
+  addClient: ({ nom, telephone, localisation }) => {
     const t = nom?.trim()
     if (!t) return Promise.reject(new Error('Nom obligatoire'))
     if (nameExists(clients, t)) return Promise.reject(new Error('Existe deja'))
-    const c = { id: nextId(clients), nom: t, telephone: telephone?.trim() || '' }
+    const c = { id: nextId(clients), nom: t, telephone: telephone?.trim() || '', localisation: localisation?.trim() || '' }
     clients = [...clients, c]
     return Promise.resolve(c)
   },
@@ -348,16 +384,50 @@ export const api = {
     appendHistorique(a.isValidated ? 'Arrivage valide' : 'Arrivage en attente', `${a.items.length} produit(s) — ${fNoms.join(', ')}.`, `${a.date}T10:00:00`)
     return Promise.resolve(enrichArrivage(a))
   },
+  updateArrivage: ({ id, date, fournisseurId, items }) => {
+    const norm = normalizeItems(items || [])
+    if (norm.length === 0) return Promise.reject(new Error('Ajoutez au moins un produit'))
+    let updated = null
+    arrivages = arrivages.map((a) => {
+      if (a.id !== id) return a
+      updated = { ...a, date: normalizeDate(date), items: norm.map((i) => ({ ...i, fournisseurId: Number(fournisseurId) })) }
+      return updated
+    })
+    if (!updated) return Promise.reject(new Error('Arrivage introuvable'))
+    return Promise.resolve(enrichArrivage(updated))
+  },
+  
 
   getVentes: () => Promise.resolve(ventes.map(enrichVente)),
   addVente: ({ date, clientId, items, isValidated }) => {
     const norm = normalizeItems(items || [])
+    // condition qui retourne qu'on doit ajouter un produit s'il n'en existe pas
     if (norm.length === 0) return Promise.reject(new Error('Ajoutez au moins un produit'))
-    if (isValidated) { try { invalidateStockForSale(norm) } catch (e) { return Promise.reject(e) } }
+    // 
+    if (isValidated) { 
+      try { 
+        invalidateStockForSale(norm) 
+      } catch (e) { 
+        return Promise.reject(e) 
+      } 
+    }
     const v = { id: nextId(ventes), date: normalizeDate(date), clientId: clientId ? Number(clientId) : null, items: norm, isValidated: Boolean(isValidated) }
     ventes = [...ventes, v]
+    // ajout de l'action dans l'historique
     appendHistorique(v.isValidated ? 'Vente validee' : 'Vente en attente', `${v.items.length} produit(s) — ${enrichVente(v).total.toLocaleString('fr-FR')} FCFA.`, `${v.date}T13:00:00`)
     return Promise.resolve(enrichVente(v))
+  },
+  updateVente: ({ id, date, clientId, items }) => {
+    const norm = normalizeItems(items || [])
+    if (norm.length === 0) return Promise.reject(new Error('Ajoutez au moins un produit'))
+    let updated = null
+    ventes = ventes.map((v) => {
+      if (v.id !== id) return v
+      updated = { ...v, date: normalizeDate(date), clientId: clientId ? Number(clientId) : null, items: norm }
+      return updated
+    })
+    if (!updated) return Promise.reject(new Error('Vente introuvable'))
+    return Promise.resolve(enrichVente(updated))
   },
 
   getInventaires: () => Promise.resolve(inventaires.map(enrichInventaire)),
@@ -375,17 +445,63 @@ export const api = {
     appendHistorique('Inventaire enregistre', `${p.nom}: theorique ${stockTheorique}, compte ${qty}, ecart ${ecart}.`, `${inv.date}T08:30:00`)
     return Promise.resolve(enrichInventaire(inv))
   },
+  updateInventaire: ({ id, date, produitId, quantitePhysique }) => {
+    const pid = Number(produitId)
+    const qty = Number(quantitePhysique)
+    const produit = findProduit(pid)
+    if (!produit) return Promise.reject(new Error('Produit introuvable'))
+    if (qty < 0) return Promise.reject(new Error('Quantite negative'))
+    const stocks = computeStocks()
+    const stockTheorique = stocks[pid] || 0
+    const ecart = qty - stockTheorique
+    let updated = null
+    inventaires = inventaires.map((inv) => {
+      if (inv.id !== id) return inv
+      updated = { ...inv, date: normalizeDate(date), produitId: pid, quantitePhysique: qty, stockTheorique, ecart }
+      return updated
+    })
+    if (!updated) return Promise.reject(new Error('Inventaire introuvable'))
+    return Promise.resolve(enrichInventaire(updated))
+  },
 
   getDepenses: () => Promise.resolve(depenses.map(enrichDepense)),
-  addDepense: ({ date, chargeId, montant, notes }) => {
+  addDepense: ({ date, chargeId, montant, notes, isValidated }) => {
     const cid = Number(chargeId)
     const m = Number(montant)
     if (!cid || !findCharge(cid)) return Promise.reject(new Error('Selectionnez une charge'))
     if (!m || m <= 0) return Promise.reject(new Error('Montant invalide'))
-    const d = { id: nextId(depenses), date: normalizeDate(date), chargeId: cid, montant: m, notes: notes?.trim() || '' }
+    const d = { id: nextId(depenses), date: normalizeDate(date), chargeId: cid, montant: m, notes: notes?.trim() || '', isValidated: Boolean(isValidated) }
     depenses = [...depenses, d]
-    appendHistorique('Depense enregistree', `${findCharge(cid)?.nom} — ${m.toLocaleString('fr-FR')} FCFA.`, `${d.date}T15:00:00`)
+    appendHistorique(
+      d.isValidated ? 'Depense validee' : 'Depense en attente',
+      `${findCharge(cid)?.nom} — ${m.toLocaleString('fr-FR')} FCFA.`,
+      `${d.date}T15:00:00`,
+    )
     return Promise.resolve(enrichDepense(d))
+  },
+  updateDepense: ({ id, date, chargeId, montant, notes }) => {
+    const cid = Number(chargeId)
+    const m = Number(montant)
+    if (!cid || !findCharge(cid)) return Promise.reject(new Error('Selectionnez une charge'))
+    if (!m || m <= 0) return Promise.reject(new Error('Montant invalide'))
+    let updated = null
+    depenses = depenses.map((d) => {
+      if (d.id !== id) return d
+      updated = { ...d, date: normalizeDate(date), chargeId: cid, montant: m, notes: notes?.trim() || '' }
+      return updated
+    })
+    if (!updated) return Promise.reject(new Error('Depense introuvable'))
+    return Promise.resolve(enrichDepense(updated))
+  },
+
+  validateDepense: (id) => {
+    const depense = depenses.find((d) => d.id === id)
+    if (!depense) return Promise.reject(new Error('Depense introuvable'))
+    if (depense.isValidated) return Promise.reject(new Error('Cette depense est deja validee'))
+    depenses = depenses.map((d) => d.id === id ? { ...d, isValidated: true } : d)
+    const enriched = enrichDepense(depenses.find((d) => d.id === id))
+    appendHistorique('Depense validee', `${findCharge(depense.chargeId)?.nom} — ${depense.montant.toLocaleString('fr-FR')} FCFA.`, new Date().toISOString())
+    return Promise.resolve(enriched)
   },
 
   getRecettes: () => Promise.resolve(recettes.map(enrichRecette)),
@@ -412,6 +528,136 @@ export const api = {
       `${r.date}T14:00:00`,
     )
     return Promise.resolve(enrichRecette(r))
+  },
+  updateRecette: ({ id, date, clientId, prestationId, prixApplique, notes }) => {
+    const pid = Number(prestationId)
+    const prix = Number(prixApplique)
+    const prestation = findPrestation(pid)
+    if (!prestation) return Promise.reject(new Error('Prestation introuvable'))
+    if (prix < 0) return Promise.reject(new Error('Prix invalide'))
+    let updated = null
+    recettes = recettes.map((r) => {
+      if (r.id !== id) return r
+      updated = { ...r, date: normalizeDate(date), clientId: clientId ? Number(clientId) : null, prestationId: pid, prixApplique: prix, notes: notes?.trim() || '' }
+      return updated
+    })
+    if (!updated) return Promise.reject(new Error('Recette introuvable'))
+    return Promise.resolve(enrichRecette(updated))
+  },
+
+  // ── Suppression référentiels ─────────────────────────────────────────────
+  deleteFournisseur: (id) => {
+    const f = fournisseurs.find((i) => i.id === id)
+    if (!f) return Promise.reject(new Error('Introuvable'))
+    fournisseurs = fournisseurs.filter((i) => i.id !== id)
+    return Promise.resolve({ message: 'Fournisseur supprime' })
+  },
+  deleteTypeProduit: (id) => {
+    const t = typesProduits.find((i) => i.id === id)
+    if (!t) return Promise.reject(new Error('Introuvable'))
+    typesProduits = typesProduits.filter((i) => i.id !== id)
+    return Promise.resolve({ message: 'Type supprime' })
+  },
+  deletePrestation: (id) => {
+    const p = prestations.find((i) => i.id === id)
+    if (!p) return Promise.reject(new Error('Introuvable'))
+    prestations = prestations.filter((i) => i.id !== id)
+    return Promise.resolve({ message: 'Prestation supprimee' })
+  },
+  deleteCharge: (id) => {
+    const c = charges.find((i) => i.id === id)
+    if (!c) return Promise.reject(new Error('Introuvable'))
+    charges = charges.filter((i) => i.id !== id)
+    return Promise.resolve({ message: 'Charge supprimee' })
+  },
+  toggleClientActif: (id) => {
+    let u = null
+    clients = clients.map((c) => { if (c.id !== id) return c; u = { ...c, actif: !c.actif }; return u })
+    if (!u) return Promise.reject(new Error('Introuvable'))
+    return Promise.resolve(u)
+  },
+
+  deleteClient: (id) => {
+    const c = clients.find((i) => i.id === id)
+    if (!c) return Promise.reject(new Error('Introuvable'))
+    clients = clients.filter((i) => i.id !== id)
+    return Promise.resolve({ message: 'Client supprime' })
+  },
+
+  // ── Modification référentiels ─────────────────────────────────────────────
+  updateFournisseur: ({ id, nom, telephone, localisation }) => {
+    const t = nom?.trim()
+    if (!t) return Promise.reject(new Error('Nom obligatoire'))
+    let updated = null
+    fournisseurs = fournisseurs.map((f) => { if (f.id !== id) return f; updated = { ...f, nom: t, telephone: telephone?.trim() || '', localisation: localisation?.trim() || '' }; return updated })
+    if (!updated) return Promise.reject(new Error('Introuvable'))
+    return Promise.resolve(updated)
+  },
+  updateTypeProduit: ({ id, nom }) => {
+    const t = nom?.trim()
+    if (!t) return Promise.reject(new Error('Nom obligatoire'))
+    let updated = null
+    typesProduits = typesProduits.map((tp) => { if (tp.id !== id) return tp; updated = { ...tp, nom: t }; return updated })
+    if (!updated) return Promise.reject(new Error('Introuvable'))
+    return Promise.resolve(updated)
+  },
+  updatePrestation: ({ id, nom, prix }) => {
+    const t = nom?.trim()
+    if (!t) return Promise.reject(new Error('Nom obligatoire'))
+    let updated = null
+    prestations = prestations.map((p) => { if (p.id !== id) return p; updated = { ...p, nom: t, prix: Number(prix || 0) }; return updated })
+    if (!updated) return Promise.reject(new Error('Introuvable'))
+    return Promise.resolve(updated)
+  },
+  updateCharge: ({ id, nom }) => {
+    const t = nom?.trim()
+    if (!t) return Promise.reject(new Error('Nom obligatoire'))
+    let updated = null
+    charges = charges.map((c) => { if (c.id !== id) return c; updated = { ...c, nom: t }; return updated })
+    if (!updated) return Promise.reject(new Error('Introuvable'))
+    return Promise.resolve(updated)
+  },
+  updateClient: ({ id, nom, telephone, localisation }) => {
+    const t = nom?.trim()
+    if (!t) return Promise.reject(new Error('Nom obligatoire'))
+    let updated = null
+    clients = clients.map((c) => { if (c.id !== id) return c; updated = { ...c, nom: t, telephone: telephone?.trim() || '', localisation: localisation?.trim() || '' }; return updated })
+    if (!updated) return Promise.reject(new Error('Introuvable'))
+    return Promise.resolve(updated)
+  },
+
+  // ── Suppression documents en attente ──────────────────────────────────────
+  deleteArrivage: (id) => {
+    const a = arrivages.find((i) => i.id === id)
+    if (!a) return Promise.reject(new Error('Introuvable'))
+    if (a.isValidated) return Promise.reject(new Error('Un arrivage valide ne peut pas etre supprime'))
+    arrivages = arrivages.filter((i) => i.id !== id)
+    appendHistorique('Arrivage supprime', `Arrivage #${id} supprime.`, new Date().toISOString())
+    return Promise.resolve({ message: 'Arrivage supprime' })
+  },
+  deleteVente: (id) => {
+    const v = ventes.find((i) => i.id === id)
+    if (!v) return Promise.reject(new Error('Introuvable'))
+    if (v.isValidated) return Promise.reject(new Error('Une vente validee ne peut pas etre supprimee'))
+    ventes = ventes.filter((i) => i.id !== id)
+    appendHistorique('Vente supprimee', `Vente #${id} supprimee.`, new Date().toISOString())
+    return Promise.resolve({ message: 'Vente supprimee' })
+  },
+  deleteRecette: (id) => {
+    const r = recettes.find((i) => i.id === id)
+    if (!r) return Promise.reject(new Error('Introuvable'))
+    if (r.isValidated) return Promise.reject(new Error('Une recette validee ne peut pas etre supprimee'))
+    recettes = recettes.filter((i) => i.id !== id)
+    appendHistorique('Recette supprimee', `Recette #${id} supprimee.`, new Date().toISOString())
+    return Promise.resolve({ message: 'Recette supprimee' })
+  },
+  deleteDepense: (id) => {
+    const d = depenses.find((i) => i.id === id)
+    if (!d) return Promise.reject(new Error('Introuvable'))
+    if (d.isValidated) return Promise.reject(new Error('Une depense validee ne peut pas etre supprimee'))
+    depenses = depenses.filter((i) => i.id !== id)
+    appendHistorique('Depense supprimee', `Depense #${id} supprimee.`, new Date().toISOString())
+    return Promise.resolve({ message: 'Depense supprimee' })
   },
 
   getStats: () => Promise.resolve(getStats()),
@@ -452,7 +698,7 @@ export const api = {
   },
 
   login: (pseudo, password) => {
-    if (pseudo && password) return Promise.resolve({ user: { id: 1, pseudo, nom: 'Admin Salon' }, token: 'mock-jwt-token-123' })
+    if (pseudo && password) return Promise.resolve({ user: { id: 1, pseudo, }, token: 'mock-jwt-token-123' })
     return Promise.reject(new Error('Identifiant ou mot de passe incorrect'))
   },
 }
