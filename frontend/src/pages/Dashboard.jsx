@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
-import { AlertTriangle, ClipboardList, Package, Receipt, ShoppingCart, TrendingUp, Wallet } from 'lucide-react'
+import { AlertTriangle, ClipboardList, FileDown, Package, Receipt, ShoppingCart, TrendingUp, Wallet } from 'lucide-react'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { generateEtatCaisse } from '../utils/pdfUtils'
 
 function Dashboard() {
   const { data: stats, isLoading } = useQuery({
@@ -25,6 +26,19 @@ function Dashboard() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const { data: ventes   = [] } = useQuery({ queryKey: ['ventes'],   queryFn: api.getVentes })
+  const { data: recettes = [] } = useQuery({ queryKey: ['recettes'], queryFn: api.getRecettes })
+  const { data: depenses = [] } = useQuery({ queryKey: ['depenses'], queryFn: api.getDepenses })
+  const [loadingCaisse, setLoadingCaisse] = useState(false)
+
+  const handleEtatCaisse = async () => {
+    setLoadingCaisse(true)
+    const mois = new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+    try { await generateEtatCaisse(ventes, recettes, depenses, `Mois de ${mois}`) }
+    catch { toast.error('Erreur generation PDF') }
+    finally { setLoadingCaisse(false) }
+  }
 
   const today = new Date().toLocaleDateString('fr-FR', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
@@ -78,6 +92,8 @@ function Dashboard() {
           value={`${stats?.etatCaisse?.toLocaleString('fr-FR') || 0} FCFA`}
           icon={TrendingUp}
           color={!stats || stats.etatCaisse >= 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}
+          onExport={handleEtatCaisse}
+          exportLoading={loadingCaisse}
         />
       </div>
 
@@ -169,16 +185,25 @@ function Dashboard() {
   )
 }
 
-function StatCard({ title, value, icon: Icon, color }) {
+function StatCard({ title, value, icon: Icon, color, onExport, exportLoading }) {
   return (
     <div className="bg-white rounded-xl border border-beige-200 p-5">
       <div className="flex items-center justify-between gap-4">
-        <div>
+        <div className="flex-1 min-w-0">
           <p className="text-xs text-beige-500 mb-1 uppercase tracking-wide">{title}</p>
-          <p className="text-xl font-semibold text-beige-900">{value}</p>
+          <p className="text-xl font-semibold text-beige-900 truncate">{value}</p>
         </div>
-        <div className={`p-3 rounded-lg ${color}`}>
-          <Icon size={20} />
+        <div className="flex flex-col items-end gap-2">
+          <div className={`p-3 rounded-lg ${color}`}>
+            <Icon size={20} />
+          </div>
+          {onExport && (
+            <button type="button" onClick={onExport} disabled={exportLoading}
+              className="flex items-center gap-1 px-2 py-1 text-xs text-beige-500 hover:text-beige-800 hover:bg-beige-50 rounded transition-colors disabled:opacity-40">
+              <FileDown size={12} />
+              PDF
+            </button>
+          )}
         </div>
       </div>
     </div>

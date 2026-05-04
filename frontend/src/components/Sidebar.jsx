@@ -6,6 +6,7 @@ import {
   ChevronRight,
   ClipboardList,
   Clock,
+  FileText,
   Layers,
   LayoutDashboard,
   LogOut,

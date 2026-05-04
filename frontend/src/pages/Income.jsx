@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, Pencil, Plus, CheckCircle2, Receipt, Trash2, X } from 'lucide-react'
+import { Loader2, Pencil, Plus, CheckCircle2, FileDown, Receipt, Trash2, X } from 'lucide-react'
 import { api } from '../api/client'
 import { useToast } from '../context/ToastContext'
 import { formatDate } from '../utils/date'
 import ConfirmModal from '../components/ConfirmModal'
+import { generateRecuRecette } from '../utils/pdfUtils'
 
 const emptyForm = () => ({
   date: new Date().toISOString().slice(0, 10),
@@ -279,6 +280,12 @@ function Income() {
                       <p className="text-sm text-beige-500 mt-0.5">{recette.clientNom || 'Client anonyme'}</p>
                     </div>
                     <div className="flex items-center gap-2">
+                      {recette.isValidated && (
+                        <button type="button" onClick={() => generateRecuRecette(recette)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-beige-300 text-beige-700 text-xs hover:bg-white transition-colors">
+                          <FileDown size={13} /> Reçu
+                        </button>
+                      )}
                       {!recette.isValidated && (
                         <button type="button" onClick={() => handleEdit(recette)}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-beige-300 text-beige-700 text-xs hover:bg-white transition-colors">

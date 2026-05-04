@@ -1,0 +1,407 @@
+// src/utils/pdfUtils.js
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+async function loadLogo() {
+  try {
+    const res = await fetch('/logo.jpg')
+    const blob = await res.blob()
+    return new Promise((resolve) => {
+      const reader = new FileReader()
+      reader.onloadend = () => resolve(reader.result)
+      reader.readAsDataURL(blob)
+    })
+  } catch {
+    return null
+  }
+}
+
+// Formatage montant sans toLocaleString (jsPDF ne supporte pas l'espace insecable)
+function fcfa(n) {
+  const num = Math.round(Number(n || 0))
+  return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' FCFA'
+}
+
+function fdate(str) {
+  if (!str) return ''
+  const [y, m, d] = str.split('-')
+  return `${d}/${m}/${y}`
+}
+
+// ─── En-tête simple ───────────────────────────────────────────────────────────
+async function addHeader(doc, title, subtitle = '') {
+  const logo = await loadLogo()
+  const pageW = doc.internal.pageSize.getWidth()
+
+  // Bande grise claire
+  doc.setFillColor(248, 248, 248)
+  doc.rect(0, 0, pageW, 28, 'F')
+
+  // Ligne de séparation fine
+  doc.setDrawColor(200, 200, 200)
+  doc.setLineWidth(0.3)
+  doc.line(0, 28, pageW, 28)
+
+  // Logo
+  if (logo) {
+    doc.addImage(logo, 'JPEG', 10, 4, 18, 18)
+  }
+
+  const textX = logo ? 32 : 10
+
+  // Nom du salon
+  doc.setTextColor(40, 40, 40)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(12)
+  doc.text('Harmonie Salon', textX, 13)
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8)
+  doc.setTextColor(130, 130, 130)
+  doc.text('WebStock — Gestion de stock', textX, 20)
+
+  // Titre du document (droite)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(13)
+  doc.setTextColor(40, 40, 40)
+  doc.text(title, pageW - 10, 13, { align: 'right' })
+
+  if (subtitle) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.setTextColor(130, 130, 130)
+    doc.text(subtitle, pageW - 10, 20, { align: 'right' })
+  }
+
+  return 36
+}
+
+// ─── Pied de page ────────────────────────────────────────────────────────────
+function addFooter(doc) {
+  const pageW = doc.internal.pageSize.getWidth()
+  const pageH = doc.internal.pageSize.getHeight()
+  const pages = doc.internal.getNumberOfPages()
+
+  for (let i = 1; i <= pages; i++) {
+    doc.setPage(i)
+    doc.setDrawColor(200, 200, 200)
+    doc.setLineWidth(0.3)
+    doc.line(10, pageH - 12, pageW - 10, pageH - 12)
+    doc.setTextColor(160, 160, 160)
+    doc.setFontSize(7)
+    doc.setFont('helvetica', 'normal')
+    doc.text('Harmonie Salon — WebStock', 10, pageH - 7)
+    doc.text(
+      `Page ${i}/${pages}  |  Imprime le ${fdate(new Date().toISOString().slice(0, 10))}`,
+      pageW - 10, pageH - 7, { align: 'right' },
+    )
+  }
+}
+
+// ─── Style tableau commun ────────────────────────────────────────────────────
+const tableStyles = {
+  styles: { fontSize: 9, cellPadding: 3, textColor: [40, 40, 40] },
+  headStyles: { fillColor: [60, 60, 60], textColor: [255, 255, 255], fontStyle: 'bold' },
+  alternateRowStyles: { fillColor: [248, 248, 248] },
+  margin: { left: 10, right: 10 },
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 1. Reçu de vente
+// ═════════════════════════════════════════════════════════════════════════════
+export async function generateRecuVente(vente) {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+  let y = await addHeader(doc, 'RECU DE VENTE', `N  VTE-${String(vente.id).padStart(4, '0')}`)
+  const pageW = doc.internal.pageSize.getWidth()
+
+  // Infos
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.setTextColor(60, 60, 60)
+  doc.text(`Date    : ${fdate(vente.date)}`, 10, y)
+  doc.text(`Client  : ${vente.clientNom || 'Client anonyme'}`, 10, y + 7)
+  y += 18
+
+  // Tableau
+  autoTable(doc, {
+    startY: y,
+    head: [['Produit', 'Qte', 'Prix de vente', 'Total']],
+    body: vente.items.map((i) => [
+      i.produitNom,
+      String(i.quantite),
+      fcfa(i.prixUnitaire),
+      fcfa(i.total),
+    ]),
+    foot: [['', '', 'TOTAL', fcfa(vente.total)]],
+    ...tableStyles,
+    footStyles: { fillColor: [40, 40, 40], textColor: [255, 255, 255], fontStyle: 'bold' },
+    columnStyles: {
+      1: { halign: 'center', cellWidth: 18 },
+      2: { halign: 'right', cellWidth: 42 },
+      3: { halign: 'right', cellWidth: 42 },
+    },
+  })
+
+  y = doc.lastAutoTable.finalY + 12
+
+  // Message bas
+  doc.setFillColor(248, 248, 248)
+  doc.roundedRect(10, y, pageW - 20, 14, 2, 2, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.setTextColor(60, 60, 60)
+  doc.text('Merci pour votre achat !', pageW / 2, y + 6, { align: 'center' })
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8)
+  doc.setTextColor(130, 130, 130)
+  doc.text('Harmonie Salon vous souhaite une excellente journee.', pageW / 2, y + 11, { align: 'center' })
+
+  addFooter(doc)
+  doc.save(`recu-vente-${String(vente.id).padStart(4, '0')}.pdf`)
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 2. Reçu de prestation
+// ═════════════════════════════════════════════════════════════════════════════
+export async function generateRecuRecette(recette) {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+  let y = await addHeader(doc, 'RECU DE PRESTATION', `N  REC-${String(recette.id).padStart(4, '0')}`)
+  const pageW = doc.internal.pageSize.getWidth()
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.setTextColor(60, 60, 60)
+  doc.text(`Date    : ${fdate(recette.date)}`, 10, y)
+  doc.text(`Client  : ${recette.clientNom || 'Client anonyme'}`, 10, y + 7)
+  y += 18
+
+  autoTable(doc, {
+    startY: y,
+    head: [['Prestation', 'Tarif reference', 'Prix applique']],
+    body: [[recette.prestationNom, fcfa(recette.prixReference), fcfa(recette.prixApplique)]],
+    ...tableStyles,
+    columnStyles: {
+      1: { halign: 'right', cellWidth: 45 },
+      2: { halign: 'right', cellWidth: 45 },
+    },
+  })
+
+  y = doc.lastAutoTable.finalY + 8
+
+  if (recette.notes) {
+    doc.setFontSize(8)
+    doc.setTextColor(130, 130, 130)
+    doc.text(`Notes : ${recette.notes}`, 10, y)
+    y += 8
+  }
+
+  // Montant total encaissé
+  doc.setFillColor(40, 40, 40)
+  doc.roundedRect(pageW - 78, y, 68, 18, 2, 2, 'F')
+  doc.setTextColor(255, 255, 255)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8)
+  doc.text('MONTANT ENCAISSE', pageW - 44, y + 6, { align: 'center' })
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(12)
+  doc.text(fcfa(recette.prixApplique), pageW - 44, y + 14, { align: 'center' })
+  y += 28
+
+  doc.setFillColor(248, 248, 248)
+  doc.roundedRect(10, y, pageW - 20, 14, 2, 2, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.setTextColor(60, 60, 60)
+  doc.text('Merci de votre confiance !', pageW / 2, y + 6, { align: 'center' })
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8)
+  doc.setTextColor(130, 130, 130)
+  doc.text('Harmonie Salon vous souhaite une excellente journee.', pageW / 2, y + 11, { align: 'center' })
+
+  addFooter(doc)
+  doc.save(`recu-prestation-${String(recette.id).padStart(4, '0')}.pdf`)
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 3. État de stock
+// ═════════════════════════════════════════════════════════════════════════════
+export async function generateEtatStock(produits) {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+  let y = await addHeader(doc, 'ETAT DE STOCK', `Au ${fdate(new Date().toISOString().slice(0, 10))}`)
+  const pageW = doc.internal.pageSize.getWidth()
+
+  const valeurTotale = produits.reduce((t, p) => t + p.stock * p.prix, 0)
+  const enRupture    = produits.filter((p) => p.stock <= 0).length
+  const stockFaible  = produits.filter((p) => p.stock > 0 && p.stock <= 5).length
+  const actifs       = produits.filter((p) => p.actif).length
+
+  // KPIs texte simple
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.setTextColor(60, 60, 60)
+  doc.text(`Produits actifs : ${actifs}   |   En rupture : ${enRupture}   |   Stock faible : ${stockFaible}   |   Valeur totale : ${fcfa(valeurTotale)}`, 10, y)
+  y += 10
+
+  // Ligne séparatrice
+  doc.setDrawColor(200, 200, 200)
+  doc.line(10, y, pageW - 10, y)
+  y += 6
+
+  // Grouper par type
+  const parType = {}
+  produits.forEach((p) => {
+    const t = p.typeNom || 'Sans type'
+    if (!parType[t]) parType[t] = []
+    parType[t].push(p)
+  })
+
+  for (const [type, items] of Object.entries(parType)) {
+    // Titre du groupe
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.setTextColor(40, 40, 40)
+    doc.text(type.toUpperCase(), 10, y)
+    y += 4
+
+    autoTable(doc, {
+      startY: y,
+      head: [['Produit', 'Prix unitaire', 'Stock', 'Valeur stock', 'Statut']],
+      body: items.map((p) => [
+        p.nom,
+        fcfa(p.prix),
+        String(p.stock),
+        fcfa(p.stock * p.prix),
+        p.actif ? 'Actif' : 'Inactif',
+      ]),
+      ...tableStyles,
+      styles: { ...tableStyles.styles, fontSize: 8 },
+      columnStyles: {
+        1: { halign: 'right', cellWidth: 38 },
+        2: { halign: 'center', cellWidth: 20 },
+        3: { halign: 'right', cellWidth: 38 },
+        4: { halign: 'center', cellWidth: 22 },
+      },
+      didParseCell(data) {
+        if (data.column.index === 2 && data.section === 'body') {
+          const val = Number(data.cell.raw)
+          if (val <= 0)      data.cell.styles.textColor = [180, 40, 40]
+          else if (val <= 5) data.cell.styles.textColor = [160, 100, 0]
+          else               data.cell.styles.textColor = [30, 130, 70]
+          data.cell.styles.fontStyle = 'bold'
+        }
+      },
+    })
+    y = doc.lastAutoTable.finalY + 6
+  }
+
+  addFooter(doc)
+  doc.save(`etat-stock-${Date.now()}.pdf`)
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 4. État de caisse
+// ═════════════════════════════════════════════════════════════════════════════
+export async function generateEtatCaisse(ventes, recettes, depenses, periode) {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+  let y = await addHeader(doc, 'ETAT DE CAISSE', periode)
+  const pageW = doc.internal.pageSize.getWidth()
+
+  const totalVentes   = ventes.filter((v) => v.isValidated).reduce((t, v) => t + (v.total || 0), 0)
+  const totalRecettes = recettes.filter((r) => r.isValidated).reduce((t, r) => t + (r.prixApplique || 0), 0)
+  const totalDepenses = depenses.filter((d) => d.isValidated).reduce((t, d) => t + (d.montant || 0), 0)
+  const solde         = totalVentes + totalRecettes - totalDepenses
+
+  // Résumé
+  const rows = [
+    { label: 'Ventes de produits',    value: fcfa(totalVentes) },
+    { label: 'Recettes / Prestations', value: fcfa(totalRecettes) },
+    { label: 'Depenses',              value: fcfa(totalDepenses) },
+  ]
+  rows.forEach((row, i) => {
+    const rowY = y + i * 10
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(60, 60, 60)
+    doc.text(row.label, 10, rowY)
+    doc.setFont('helvetica', 'bold')
+    doc.text(row.value, pageW - 10, rowY, { align: 'right' })
+    doc.setDrawColor(220, 220, 220)
+    doc.setLineWidth(0.2)
+    doc.line(10, rowY + 3, pageW - 10, rowY + 3)
+  })
+  y += 38
+
+  // Solde net
+  const soldeColor = solde >= 0 ? [30, 130, 70] : [180, 40, 40]
+  doc.setFillColor(...soldeColor)
+  doc.roundedRect(10, y, pageW - 20, 16, 2, 2, 'F')
+  doc.setTextColor(255, 255, 255)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(10)
+  doc.text('SOLDE NET', 16, y + 10)
+  doc.setFontSize(12)
+  doc.text(fcfa(solde), pageW - 14, y + 10, { align: 'right' })
+  y += 24
+
+  // Détail des opérations
+  const operations = [
+    ...ventes.filter((v) => v.isValidated).map((v) => ({
+      date: v.date, type: 'Vente',
+      ref: `VTE-${String(v.id).padStart(4, '0')}`,
+      label: v.clientNom || 'Anonyme',
+      entree: fcfa(v.total), sortie: '',
+    })),
+    ...recettes.filter((r) => r.isValidated).map((r) => ({
+      date: r.date, type: 'Recette',
+      ref: `REC-${String(r.id).padStart(4, '0')}`,
+      label: r.prestationNom,
+      entree: fcfa(r.prixApplique), sortie: '',
+    })),
+    ...depenses.filter((d) => d.isValidated).map((d) => ({
+      date: d.date, type: 'Depense',
+      ref: `DEP-${String(d.id).padStart(4, '0')}`,
+      label: d.chargeNom,
+      entree: '', sortie: fcfa(d.montant),
+    })),
+  ].sort((a, b) => a.date.localeCompare(b.date))
+
+  if (operations.length > 0) {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.setTextColor(40, 40, 40)
+    doc.text('Detail des operations', 10, y)
+    y += 5
+
+    autoTable(doc, {
+      startY: y,
+      head: [['Date', 'Type', 'Reference', 'Libelle', 'Entree', 'Sortie']],
+      body: operations.map((op) => [
+        fdate(op.date), op.type, op.ref, op.label, op.entree, op.sortie,
+      ]),
+      ...tableStyles,
+      styles: { ...tableStyles.styles, fontSize: 8 },
+      columnStyles: {
+        0: { cellWidth: 22 },
+        1: { cellWidth: 20 },
+        2: { cellWidth: 26 },
+        4: { halign: 'right', cellWidth: 36 },
+        5: { halign: 'right', cellWidth: 36 },
+      },
+      didParseCell(data) {
+        if (data.column.index === 4 && data.section === 'body' && data.cell.raw !== '') {
+          data.cell.styles.textColor = [30, 130, 70]
+          data.cell.styles.fontStyle = 'bold'
+        }
+        if (data.column.index === 5 && data.section === 'body' && data.cell.raw !== '') {
+          data.cell.styles.textColor = [180, 40, 40]
+          data.cell.styles.fontStyle = 'bold'
+        }
+      },
+    })
+  }
+
+  addFooter(doc)
+  doc.save(`etat-caisse-${Date.now()}.pdf`)
+}

@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, CheckCircle2, Loader2, Pencil, Plus, ShoppingCart, Trash2, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, FileDown, Loader2, Pencil, Plus, ShoppingCart, Trash2, X } from 'lucide-react'
 import { api } from '../api/client'
 import { useToast } from '../context/ToastContext'
 import { formatDate } from '../utils/date'
 import ConfirmModal from '../components/ConfirmModal'
+import { generateRecuVente } from '../utils/pdfUtils'
 
 const createItem = () => ({ produitId: '', quantite: '', prixVente: '' })
 
@@ -458,6 +459,12 @@ function Sales() {
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
+                      {vente.isValidated && (
+                        <button type="button" onClick={() => generateRecuVente(vente)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-beige-300 text-beige-700 text-xs hover:bg-white transition-colors">
+                          <FileDown size={13} /> Reçu
+                        </button>
+                      )}
                       {!vente.isValidated && (
                         <button type="button" onClick={() => handleEdit(vente)}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-beige-300 text-beige-700 text-xs hover:bg-white transition-colors">

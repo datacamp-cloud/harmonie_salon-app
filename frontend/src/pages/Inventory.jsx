@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ClipboardList, Loader2, Pencil, Plus, X } from 'lucide-react'
+import { ClipboardList, FileDown, Loader2, Pencil, Plus, X } from 'lucide-react'
 import { api } from '../api/client'
 import { useToast } from '../context/ToastContext'
 import { formatDate } from '../utils/date'
+import { generateEtatStock } from '../utils/pdfUtils'
 
 function Inventory() {
   const [formData, setFormData] = useState({
@@ -118,6 +119,11 @@ function Inventory() {
           <InfoCard label="Produits suivis" value={produits.length} />
           <InfoCard label="Inventaires du mois" value={monthlyCount} tone="warning" />
         </div>
+        <button type="button" onClick={() => generateEtatStock(produits)}
+          disabled={produits.length === 0}
+          className="flex items-center gap-2 px-4 py-2.5 bg-beige-900 text-white text-sm rounded-lg hover:bg-beige-800 transition-colors disabled:opacity-40">
+          <FileDown size={16} /> Etat de stock PDF
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[0.95fr_1.05fr] gap-6">
