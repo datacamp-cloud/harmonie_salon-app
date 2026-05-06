@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\UserController;
 use App\Http\Controllers\ArrivageController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ChargeController;
@@ -98,4 +99,12 @@ Route::middleware('auth:sanctum')->group(function () {
     // Stats & Historique
     Route::get('/stats',      [StatsController::class, 'index']);
     Route::get('/historique', [StatsController::class, 'historique']);
-});
+
+    // Gestion des utilisateurs (admin uniquement)
+    Route::middleware('can:admin')->group(function () {
+        Route::get    ('/users',                        [UserController::class, 'index']);
+        Route::post   ('/users',                        [UserController::class, 'store']);
+        Route::put    ('/users/{user}',                 [UserController::class, 'update']);
+        Route::patch  ('/users/{user}/password',        [UserController::class, 'updatePassword']);
+        Route::delete ('/users/{user}',                 [UserController::class, 'destroy']);
+    });

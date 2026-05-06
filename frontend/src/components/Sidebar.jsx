@@ -36,11 +36,15 @@ const navItems = [
 
 const settingsItems = [
   { path: '/parametres/types-produits', label: 'Types de produits', icon: Tags },
-  { path: '/parametres/produits', label: 'Produits', icon: Package },
-  { path: '/parametres/prestations', label: 'Prestations', icon: Receipt },
-  { path: '/parametres/clients', label: 'Clients', icon: UserCheck },
-  { path: '/parametres/fournisseurs', label: 'Fournisseurs', icon: Users },
-  { path: '/parametres/charges', label: 'Charges', icon: Layers },
+  { path: '/parametres/produits',       label: 'Produits',          icon: Package },
+  { path: '/parametres/prestations',    label: 'Prestations',       icon: Receipt },
+  { path: '/parametres/clients',        label: 'Clients',           icon: UserCheck },
+  { path: '/parametres/fournisseurs',   label: 'Fournisseurs',      icon: Users },
+  { path: '/parametres/charges',        label: 'Charges',           icon: Layers },
+]
+
+const adminSettingsItems = [
+  { path: '/parametres/utilisateurs', label: 'Utilisateurs', icon: Users },
 ]
 
 function Sidebar() {
@@ -49,9 +53,14 @@ function Sidebar() {
   const location = useLocation()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
+  const allSettingsItems = useMemo(
+    () => user?.role === 'admin' ? [...settingsItems, ...adminSettingsItems] : settingsItems,
+    [user],
+  )
+
   const settingsIsActive = useMemo(
-    () => settingsItems.some((item) => location.pathname.startsWith(item.path)),
-    [location.pathname],
+    () => allSettingsItems.some((item) => location.pathname.startsWith(item.path)),
+    [location.pathname, allSettingsItems],
   )
   const [settingsOpen, setSettingsOpen] = useState(settingsIsActive)
 
@@ -144,7 +153,7 @@ function Sidebar() {
 
               {settingsOpen && (
                 <ul className="mt-1 space-y-0.5">
-                  {settingsItems.map((item) => (
+                  {allSettingsItems.map((item) => (
                     <li key={item.path}>
                       <NavLink
                         to={item.path}

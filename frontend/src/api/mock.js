@@ -1,3 +1,8 @@
+export let mockUsers = [
+  { id: 1, name: 'Admin Salon', pseudo: 'admin',    role: 'admin' },
+  { id: 2, name: 'Caissier',    pseudo: 'caissier', role: 'caissier' },
+]
+
 const todayIso = new Date().toISOString()
 
 export let fournisseurs = [
@@ -697,8 +702,55 @@ export const api = {
     return Promise.resolve(enriched)
   },
 
+  // ── Utilisateurs (admin seulement) ──────────────────────────────────────────
+  getUsers: () => Promise.resolve([...mockUsers]),
+
+  addUser: ({ name, pseudo, role, password }) => {
+    const n = name?.trim()
+    const p = pseudo?.trim()
+    if (!n || !p) return Promise.reject(new Error('Nom et identifiant obligatoires'))
+    if (!password || password.length < 8) return Promise.reject(new Error('Mot de passe trop court (8 caracteres min)'))
+    if (mockUsers.some((u) => u.pseudo === p)) return Promise.reject(new Error('Cet identifiant existe deja'))
+    const user = { id: nextId(mockUsers), name: n, pseudo: p, role: role || 'caissier' }
+    mockUsers = [...mockUsers, user]
+    return Promise.resolve(user)
+  },
+
+  updateUser: ({ id, name, pseudo, role }) => {
+    const n = name?.trim()
+    const p = pseudo?.trim()
+    if (!n || !p) return Promise.reject(new Error('Nom et identifiant obligatoires'))
+    if (mockUsers.some((u) => u.pseudo === p && u.id !== id)) return Promise.reject(new Error('Cet identifiant existe deja'))
+    let updated = null
+    mockUsers = mockUsers.map((u) => { if (u.id !== id) return u; updated = { ...u, name: n, pseudo: p, role }; return updated })
+    if (!updated) return Promise.reject(new Error('Utilisateur introuvable'))
+    return Promise.resolve(updated)
+  },
+
+  updateUserPassword: ({ id, password }) => {
+    if (!password || password.length < 8) return Promise.reject(new Error('Mot de passe trop court (8 caracteres min)'))
+    const user = mockUsers.find((u) => u.id === id)
+    if (!user) return Promise.reject(new Error('Utilisateur introuvable'))
+    return Promise.resolve({ message: 'Mot de passe mis a jour' })
+  },
+
+  deleteUser: (id) => {
+    const user = mockUsers.find((u) => u.id === id)
+    if (!user) return Promise.reject(new Error('Utilisateur introuvable'))
+    mockUsers = mockUsers.filter((u) => u.id !== id)
+    return Promise.resolve({ message: 'Utilisateur supprime' })
+  },
+
   login: (pseudo, password) => {
-    if (pseudo && password) return Promise.resolve({ user: { id: 1, pseudo, }, token: 'mock-jwt-token-123' })
+    const users = [
+      { id: 1, pseudo: 'admin',    password: 'admin@@webstock',     name: 'Admin Salon', role: 'admin' },
+      { id: 2, pseudo: 'caissier', password: 'caissiere@@webstock', name: 'Caissier',    role: 'caissier' },
+    ]
+    const user = users.find((u) => u.pseudo === pseudo && u.password === password)
+    if (user) {
+      const { password: _, ...safeUser } = user
+      return Promise.resolve({ user: safeUser, token: 'mock-jwt-token-123' })
+    }
     return Promise.reject(new Error('Identifiant ou mot de passe incorrect'))
   },
 }

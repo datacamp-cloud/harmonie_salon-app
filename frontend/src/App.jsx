@@ -14,6 +14,7 @@ import ProductTypes from './pages/settings/ProductTypes'
 import Services from './pages/settings/Services'
 import Charges from './pages/settings/Charges'
 import Clients from './pages/settings/Customers'
+import UsersPage from './pages/settings/Users'
 import Layout from './components/Layout'
 
 function ProtectedRoute({ children }) {
@@ -65,6 +66,7 @@ function AppRoutes() {
         <Route path="parametres/produits" element={<Products />} /> 
         <Route path="parametres/charges" element={<Charges />} />
         <Route path="parametres/clients" element={<Clients />} />
+        <Route path="parametres/utilisateurs" element={<UsersPage />} />
        
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

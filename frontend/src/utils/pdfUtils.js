@@ -127,20 +127,31 @@ export async function generateRecuVente(vente) {
   // Tableau
   autoTable(doc, {
     startY: y,
-    head: [['Produit', 'Qte', 'Prix de vente', 'Total']],
+    head: [['Produit', 'Qté', 'Prix de vente', 'Total']],
+    didParseCell(data) {
+      if (data.section === 'head') {
+        if (data.column.index === 1) data.cell.styles.halign = 'center' // Qte
+        if (data.column.index === 2) data.cell.styles.halign = 'right'  // Prix de vente
+        if (data.column.index === 3) data.cell.styles.halign = 'right'  // Total
+      }
+
+      if (data.section === 'foot'){
+        if (data.column.index === 3) data.cell.styles.halign ='right'
+      }
+    },
     body: vente.items.map((i) => [
       i.produitNom,
       String(i.quantite),
       fcfa(i.prixUnitaire),
       fcfa(i.total),
     ]),
-    foot: [['', '', 'TOTAL', fcfa(vente.total)]],
+    foot: [['', '', '', fcfa(vente.total)]],
     ...tableStyles,
     footStyles: { fillColor: [40, 40, 40], textColor: [255, 255, 255], fontStyle: 'bold' },
     columnStyles: {
-      1: { halign: 'center', cellWidth: 18 },
-      2: { halign: 'right', cellWidth: 42 },
-      3: { halign: 'right', cellWidth: 42 },
+      1: { halign: 'center', cellWidth: 12 },
+      2: { halign: 'right', cellWidth: 45 },
+      3: { halign: 'right', cellWidth: 45 },
     },
   })
 
@@ -185,6 +196,16 @@ export async function generateRecuRecette(recette) {
     columnStyles: {
       1: { halign: 'right', cellWidth: 45 },
       2: { halign: 'right', cellWidth: 45 },
+    },
+    didParseCell(data) {
+      if (data.section === 'head') {
+        if (data.column.index === 1) data.cell.styles.halign = 'right' // Qte
+        if (data.column.index === 2) data.cell.styles.halign = 'right'  // Prix de vente
+      }
+
+      if (data.section === 'foot'){
+        if (data.column.index === 3) data.cell.styles.halign ='right'
+      }
     },
   })
 
