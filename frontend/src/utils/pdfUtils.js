@@ -248,9 +248,12 @@ export async function generateRecuRecette(recette) {
 // ═════════════════════════════════════════════════════════════════════════════
 // 3. État de stock
 // ═════════════════════════════════════════════════════════════════════════════
-export async function generateEtatStock(produits) {
+export async function generateEtatStock(produits, dateChoisie) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
-  let y = await addHeader(doc, 'ETAT DE STOCK', `Au ${fdate(new Date().toISOString().slice(0, 10))}`)
+  const dateStr = dateChoisie
+    ? dateChoisie.split('-').reverse().join('/')
+    : new Date().toLocaleDateString('fr-FR')
+  let y = await addHeader(doc, 'ETAT DE STOCK', `Au ${dateStr}`)
   const pageW = doc.internal.pageSize.getWidth()
 
   const valeurTotale = produits.reduce((t, p) => t + p.stock * p.prix, 0)
@@ -259,11 +262,11 @@ export async function generateEtatStock(produits) {
   const actifs       = produits.filter((p) => p.actif).length
 
   // KPIs texte simple
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  doc.setTextColor(60, 60, 60)
-  doc.text(`Produits actifs : ${actifs}   |   En rupture : ${enRupture}   |   Stock faible : ${stockFaible}   |   Valeur totale : ${fcfa(valeurTotale)}`, 10, y)
-  y += 10
+  // doc.setFont('helvetica', 'normal')
+  // doc.setFontSize(9)
+  // doc.setTextColor(60, 60, 60)
+  // doc.text(`Produits actifs : ${actifs}   |   En rupture : ${enRupture}   |   Stock faible : ${stockFaible}`, 10, y)
+  // y += 10
 
   // Ligne séparatrice
   doc.setDrawColor(200, 200, 200)
@@ -288,24 +291,18 @@ export async function generateEtatStock(produits) {
 
     autoTable(doc, {
       startY: y,
-      head: [['Produit', 'Prix unitaire', 'Stock', 'Valeur stock', 'Statut']],
-      body: items.map((p) => [
-        p.nom,
-        fcfa(p.prix),
-        String(p.stock),
-        fcfa(p.stock * p.prix),
-        p.actif ? 'Actif' : 'Inactif',
-      ]),
+      head: [['Produit', 'Stock']],
+      body: items.map((p) => [p.nom, String(p.stock)]),
       ...tableStyles,
       styles: { ...tableStyles.styles, fontSize: 8 },
       columnStyles: {
-        1: { halign: 'right', cellWidth: 38 },
-        2: { halign: 'center', cellWidth: 20 },
-        3: { halign: 'right', cellWidth: 38 },
-        4: { halign: 'center', cellWidth: 22 },
+        1: { halign: 'center', cellWidth: 30 },
       },
       didParseCell(data) {
-        if (data.column.index === 2 && data.section === 'body') {
+        if (data.section === 'head' && data.column.index === 1) {
+          data.cell.styles.halign = 'center'
+        }
+        if (data.column.index === 1 && data.section === 'body') {
           const val = Number(data.cell.raw)
           if (val <= 0)      data.cell.styles.textColor = [180, 40, 40]
           else if (val <= 5) data.cell.styles.textColor = [160, 100, 0]
@@ -318,7 +315,8 @@ export async function generateEtatStock(produits) {
   }
 
   addFooter(doc)
-  doc.save(`etat-stock-${Date.now()}.pdf`)
+  const urlStock = doc.output('bloburl')
+  window.open(urlStock, '_blank')
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -364,65 +362,173 @@ export async function generateEtatCaisse(ventes, recettes, depenses, periode) {
   doc.text('SOLDE NET', 16, y + 10)
   doc.setFontSize(12)
   doc.text(fcfa(solde), pageW - 14, y + 10, { align: 'right' })
-  y += 24
-
-  // Détail des opérations
-  const operations = [
-    ...ventes.filter((v) => v.isValidated).map((v) => ({
-      date: v.date, type: 'Vente',
-      ref: `VTE-${String(v.id).padStart(4, '0')}`,
-      label: v.clientNom || 'Anonyme',
-      entree: fcfa(v.total), sortie: '',
-    })),
-    ...recettes.filter((r) => r.isValidated).map((r) => ({
-      date: r.date, type: 'Recette',
-      ref: `REC-${String(r.id).padStart(4, '0')}`,
-      label: r.prestationNom,
-      entree: fcfa(r.prixApplique), sortie: '',
-    })),
-    ...depenses.filter((d) => d.isValidated).map((d) => ({
-      date: d.date, type: 'Depense',
-      ref: `DEP-${String(d.id).padStart(4, '0')}`,
-      label: d.chargeNom,
-      entree: '', sortie: fcfa(d.montant),
-    })),
-  ].sort((a, b) => a.date.localeCompare(b.date))
-
-  if (operations.length > 0) {
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
-    doc.setTextColor(40, 40, 40)
-    doc.text('Detail des operations', 10, y)
-    y += 5
-
-    autoTable(doc, {
-      startY: y,
-      head: [['Date', 'Type', 'Reference', 'Libelle', 'Entree', 'Sortie']],
-      body: operations.map((op) => [
-        fdate(op.date), op.type, op.ref, op.label, op.entree, op.sortie,
-      ]),
-      ...tableStyles,
-      styles: { ...tableStyles.styles, fontSize: 8 },
-      columnStyles: {
-        0: { cellWidth: 22 },
-        1: { cellWidth: 20 },
-        2: { cellWidth: 26 },
-        4: { halign: 'right', cellWidth: 36 },
-        5: { halign: 'right', cellWidth: 36 },
-      },
-      didParseCell(data) {
-        if (data.column.index === 4 && data.section === 'body' && data.cell.raw !== '') {
-          data.cell.styles.textColor = [30, 130, 70]
-          data.cell.styles.fontStyle = 'bold'
-        }
-        if (data.column.index === 5 && data.section === 'body' && data.cell.raw !== '') {
-          data.cell.styles.textColor = [180, 40, 40]
-          data.cell.styles.fontStyle = 'bold'
-        }
-      },
-    })
-  }
 
   addFooter(doc)
-  doc.save(`etat-caisse-${Date.now()}.pdf`)
+  const url = doc.output('bloburl')
+  window.open(url, '_blank')
+}
+
+// ── 5. Liste periodique des ventes ─────────────────────────────────────────
+export async function generateListeVentes(ventes, dateDebut, dateFin) {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' })
+  const periode = `Du ${dateDebut.split('-').reverse().join('/')} au ${dateFin.split('-').reverse().join('/')}`
+  let y = await addHeader(doc, 'LISTE DES VENTES', periode)
+  const pageW = doc.internal.pageSize.getWidth()
+  const ventesValidees = ventes.filter((v) => v.isValidated)
+  const total = ventesValidees.reduce((t, v) => t + (v.total || 0), 0)
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8)
+  doc.setTextColor(80, 80, 80)
+  doc.text(`${ventes.length} vente(s)  |  Validees : ${ventesValidees.length}  |  Montant total : ${fcfa(total)}`, 10, y)
+  y += 8
+
+  autoTable(doc, {
+    startY: y,
+    head: [['Date', 'Client', 'Produits', 'Qte', 'Total', 'Statut']],
+    body: ventes.map((v) => [
+      fdate(v.date),
+      v.clientNom || 'Anonyme',
+      v.items?.map((i) => i.produitNom).join(', ') || '',
+      String(v.totalQuantite || 0),
+      fcfa(v.total),
+      v.isValidated ? 'Validee' : 'En attente',
+    ]),
+    ...tableStyles,
+    styles: { ...tableStyles.styles, fontSize: 8 },
+    columnStyles: {
+      0: { cellWidth: 24 }, 1: { cellWidth: 40 },
+      3: { halign: 'center', cellWidth: 16 },
+      4: { halign: 'right', cellWidth: 38 },
+      5: { halign: 'center', cellWidth: 24 },
+    },
+    didParseCell(data) {
+      if (data.section === 'head') {
+        if (data.column.index === 3) data.cell.styles.halign = 'center'
+        if (data.column.index === 4) data.cell.styles.halign = 'right'
+        if (data.column.index === 5) data.cell.styles.halign = 'center'
+      }
+      if (data.column.index === 5 && data.section === 'body') {
+        data.cell.styles.textColor = data.cell.raw === 'Validee' ? [30, 130, 70] : [160, 100, 0]
+        data.cell.styles.fontStyle = 'bold'
+      }
+    },
+  })
+
+  const finalY = doc.lastAutoTable.finalY + 4
+  doc.setFillColor(40, 40, 40)
+  doc.rect(10, finalY, pageW - 20, 9, 'F')
+  doc.setTextColor(255, 255, 255)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.text(`TOTAL : ${fcfa(total)}`, pageW - 14, finalY + 6, { align: 'right' })
+  addFooter(doc)
+  const url = doc.output('bloburl')
+  window.open(url, '_blank')
+}
+
+// ── 6. Liste periodique des recettes ───────────────────────────────────────
+export async function generateListeRecettes(recettes, dateDebut, dateFin) {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+  const periode = `Du ${dateDebut.split('-').reverse().join('/')} au ${dateFin.split('-').reverse().join('/')}`
+  let y = await addHeader(doc, 'LISTE DES RECETTES', periode)
+  const pageW = doc.internal.pageSize.getWidth()
+  const recettesValidees = recettes.filter((r) => r.isValidated)
+  const total = recettesValidees.reduce((t, r) => t + (r.prixApplique || 0), 0)
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8)
+  doc.setTextColor(80, 80, 80)
+  doc.text(`${recettes.length} recette(s)  |  Validees : ${recettesValidees.length}  |  Montant total : ${fcfa(total)}`, 10, y)
+  y += 8
+
+  autoTable(doc, {
+    startY: y,
+    head: [['Date', 'Prestation', 'Client', 'Prix applique', 'Statut']],
+    body: recettes.map((r) => [
+      fdate(r.date), r.prestationNom, r.clientNom || 'Anonyme',
+      fcfa(r.prixApplique), r.isValidated ? 'Validee' : 'En attente',
+    ]),
+    ...tableStyles,
+    styles: { ...tableStyles.styles, fontSize: 8.5 },
+    columnStyles: {
+      0: { cellWidth: 26 },
+      3: { halign: 'right', cellWidth: 42 },
+      4: { halign: 'center', cellWidth: 26 },
+    },
+    didParseCell(data) {
+      if (data.section === 'head') {
+        if (data.column.index === 3) data.cell.styles.halign = 'right'
+        if (data.column.index === 4) data.cell.styles.halign = 'center'
+      }
+      if (data.column.index === 4 && data.section === 'body') {
+        data.cell.styles.textColor = data.cell.raw === 'Validee' ? [30, 130, 70] : [160, 100, 0]
+        data.cell.styles.fontStyle = 'bold'
+      }
+    },
+  })
+
+  const finalY = doc.lastAutoTable.finalY + 4
+  doc.setFillColor(40, 40, 40)
+  doc.rect(10, finalY, pageW - 20, 9, 'F')
+  doc.setTextColor(255, 255, 255)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.text(`TOTAL : ${fcfa(total)}`, pageW - 14, finalY + 6, { align: 'right' })
+  addFooter(doc)
+  const urlRec = doc.output('bloburl')
+  window.open(urlRec, '_blank')
+}
+
+// ── 7. Liste periodique des depenses ───────────────────────────────────────
+export async function generateListeDepenses(depenses, dateDebut, dateFin) {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+  const periode = `Du ${dateDebut.split('-').reverse().join('/')} au ${dateFin.split('-').reverse().join('/')}`
+  let y = await addHeader(doc, 'LISTE DES DEPENSES', periode)
+  const pageW = doc.internal.pageSize.getWidth()
+  const depensesValidees = depenses.filter((d) => d.isValidated)
+  const total = depensesValidees.reduce((t, d) => t + (d.montant || 0), 0)
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8)
+  doc.setTextColor(80, 80, 80)
+  doc.text(`${depenses.length} depense(s)  |  Validees : ${depensesValidees.length}  |  Montant total : ${fcfa(total)}`, 10, y)
+  y += 8
+
+  autoTable(doc, {
+    startY: y,
+    head: [['Date', 'Charge', 'Montant', 'Notes', 'Statut']],
+    body: depenses.map((d) => [
+      fdate(d.date), d.chargeNom, fcfa(d.montant), d.notes || '',
+      d.isValidated ? 'Validee' : 'En attente',
+    ]),
+    ...tableStyles,
+    styles: { ...tableStyles.styles, fontSize: 8.5 },
+    columnStyles: {
+      0: { cellWidth: 26 }, 1: { cellWidth: 48 },
+      2: { halign: 'right', cellWidth: 42 },
+      4: { halign: 'center', cellWidth: 26 },
+    },
+    didParseCell(data) {
+      if (data.section === 'head') {
+        if (data.column.index === 2) data.cell.styles.halign = 'right'
+        if (data.column.index === 4) data.cell.styles.halign = 'center'
+      }
+      if (data.column.index === 4 && data.section === 'body') {
+        data.cell.styles.textColor = data.cell.raw === 'Validee' ? [30, 130, 70] : [160, 100, 0]
+        data.cell.styles.fontStyle = 'bold'
+      }
+    },
+  })
+
+  const finalY = doc.lastAutoTable.finalY + 4
+  doc.setFillColor(40, 40, 40)
+  doc.rect(10, finalY, pageW - 20, 9, 'F')
+  doc.setTextColor(255, 255, 255)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.text(`TOTAL : ${fcfa(total)}`, pageW - 14, finalY + 6, { align: 'right' })
+  addFooter(doc)
+  const urlDep = doc.output('bloburl')
+  window.open(urlDep, '_blank')
 }

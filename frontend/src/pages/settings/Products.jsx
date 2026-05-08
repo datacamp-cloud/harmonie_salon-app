@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, Package, Pencil, Plus, Power, Tag, Trash2, X } from 'lucide-react'
+import { Loader2, Package, Pencil, Plus, Power, Tag, Trash2, X, FileDown } from 'lucide-react'
 import { api } from '../../api/client'
 import { useToast } from '../../context/ToastContext'
 import ConfirmModal from '../../components/ConfirmModal'
+import { generateEtatStock } from '../../utils/pdfUtils'
 
 function Products() {
   const [showForm, setShowForm] = useState(false)
@@ -11,6 +12,8 @@ function Products() {
   const [formData, setFormData] = useState({ nom: '', typeId: '', prix: '', actif: true })
   const [editData, setEditData] = useState({ nom: '', typeId: '', prix: '' })
   const [confirmDelete, setConfirmDelete] = useState(null)
+  const [loadingPdf, setLoadingPdf] = useState(false)
+  const [dateStock, setDateStock]   = useState(new Date().toISOString().slice(0, 10))
   const queryClient = useQueryClient()
   const toast = useToast()
 
@@ -23,6 +26,33 @@ function Products() {
     queryKey: ['types-produits'],
     queryFn: api.getTypesProduits,
   })
+
+  const { data: arrivages  = [] } = useQuery({ queryKey: ['arrivages'],  queryFn: api.getArrivages })
+  const { data: ventes     = [] } = useQuery({ queryKey: ['ventes'],     queryFn: api.getVentes })
+  const { data: inventaires = [] } = useQuery({ queryKey: ['inventaires'], queryFn: api.getInventaires })
+
+  // Calcul du stock de chaque produit à la date choisie
+  const produitsAtDate = useMemo(() => {
+    return produits.map((p) => {
+      const entrees = arrivages
+        .filter((a) => a.isValidated && a.date <= dateStock)
+        .flatMap((a) => a.items || [])
+        .filter((i) => i.produitId === p.id)
+        .reduce((t, i) => t + i.quantite, 0)
+
+      const sorties = ventes
+        .filter((v) => v.isValidated && v.date <= dateStock)
+        .flatMap((v) => v.items || [])
+        .filter((i) => i.produitId === p.id)
+        .reduce((t, i) => t + i.quantite, 0)
+
+      const ecarts = inventaires
+        .filter((inv) => inv.isValidated && inv.date <= dateStock && inv.produitId === p.id)
+        .reduce((t, inv) => t + inv.ecart, 0)
+
+      return { ...p, stock: entrees - sorties + ecarts }
+    })
+  }, [produits, arrivages, ventes, inventaires, dateStock])
 
   const invalidateData = () => {
     queryClient.invalidateQueries({ queryKey: ['produits'] })
@@ -115,6 +145,22 @@ function Products() {
         <div className="flex flex-wrap items-center gap-3">
           <KpiCard label="Produits actifs" value={activeProducts.length} />
           <KpiCard label="Stock faible" value={produits.filter((produit) => produit.stock <= 5).length} tone="warning" />
+          <div>
+            <label className="block text-xs text-beige-500 mb-1">Etat de stock au</label>
+            <input type="date" value={dateStock} onChange={(e) => setDateStock(e.target.value)}
+              className="px-3 py-2 text-sm border border-beige-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-beige-300" />
+          </div>
+          <button type="button" disabled={loadingPdf || produits.length === 0}
+            onClick={async () => {
+              setLoadingPdf(true)
+              try { await generateEtatStock(produitsAtDate, dateStock) }
+              catch { toast.error('Erreur PDF') }
+              finally { setLoadingPdf(false) }
+            }}
+            className="flex items-center gap-2 px-4 py-2.5 border border-beige-300 text-beige-700 rounded-lg hover:bg-beige-50 transition-colors disabled:opacity-40 text-sm">
+            <FileDown size={16} />
+            {loadingPdf ? 'Generation...' : 'Etat de stock'}
+          </button>
           <button
             type="button"
             onClick={() => setShowForm(true)}

@@ -187,25 +187,24 @@ function Dashboard() {
 
 function StatCard({ title, value, icon: Icon, color, onExport, exportLoading }) {
   return (
-    <div className="bg-white rounded-xl border border-beige-200 p-5">
+    <div className="bg-white rounded-xl border border-beige-200 p-5 flex flex-col gap-3">
       <div className="flex items-center justify-between gap-4">
         <div className="flex-1 min-w-0">
           <p className="text-xs text-beige-500 mb-1 uppercase tracking-wide">{title}</p>
           <p className="text-xl font-semibold text-beige-900 truncate">{value}</p>
         </div>
-        <div className="flex flex-col items-end gap-2">
-          <div className={`p-3 rounded-lg ${color}`}>
-            <Icon size={20} />
-          </div>
-          {onExport && (
-            <button type="button" onClick={onExport} disabled={exportLoading}
-              className="flex items-center gap-1 px-2 py-1 text-xs text-beige-500 hover:text-beige-800 hover:bg-beige-50 rounded transition-colors disabled:opacity-40">
-              <FileDown size={12} />
-              PDF
-            </button>
-          )}
+        <div className={`p-3 rounded-lg ${color}`}>
+          <Icon size={20} />
         </div>
       </div>
+      {onExport && (
+        <button type="button" onClick={onExport} disabled={exportLoading}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-beige-900 text-white text-xs rounded-lg hover:bg-beige-800 transition-colors disabled:opacity-50">
+          {exportLoading
+            ? <><span className="animate-spin">⏳</span> Generation...</>
+            : <><FileDown size={13} /> Voir l etat de caisse</>}
+        </button>
+      )}
     </div>
   )
 }

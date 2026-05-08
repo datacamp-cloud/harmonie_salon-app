@@ -744,7 +744,7 @@ export const api = {
   login: (pseudo, password) => {
     const users = [
       { id: 1, pseudo: 'admin',    password: 'admin@@webstock',     name: 'Admin Salon', role: 'admin' },
-      { id: 2, pseudo: 'caissier', password: 'caissiere@@webstock', name: 'Caissier',    role: 'caissier' },
+      { id: 2, pseudo: 'caissier', password: 'caissier@@webstock', name: 'Caissier',    role: 'caissier' },
     ]
     const user = users.find((u) => u.pseudo === pseudo && u.password === password)
     if (user) {

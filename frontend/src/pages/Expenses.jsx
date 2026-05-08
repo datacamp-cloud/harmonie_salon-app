@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, CheckCircle2, Pencil, Plus, Trash2, Wallet, X } from 'lucide-react'
+import { Loader2, CheckCircle2, FileDown, Pencil, Plus, Trash2, Wallet, X } from 'lucide-react'
 import { api } from '../api/client'
 import { useToast } from '../context/ToastContext'
 import { formatDate } from '../utils/date'
 import ConfirmModal from '../components/ConfirmModal'
+import { generateListeDepenses } from '../utils/pdfUtils'
 
 const emptyForm = () => ({
   date: new Date().toISOString().slice(0, 10),
@@ -18,9 +19,13 @@ function Expenses() {
   const [formData, setFormData] = useState(emptyForm())
   const [editingId, setEditingId] = useState(null)
   const [confirmValidate, setConfirmValidate] = useState(null)
-  const [confirmDelete, setConfirmDelete] = useState(null)
-  const [search, setSearch] = useState('')
-  const [period, setPeriod] = useState('all')
+  const [confirmDelete, setConfirmDelete]     = useState(null)
+  const [search, setSearch]                   = useState('')
+  const [period, setPeriod]                   = useState('all')
+  const [dateDebut, setDateDebut]             = useState('')
+  const [dateFin, setDateFin]                 = useState('')
+  const [listeResultats, setListeResultats]   = useState(null)
+  const [loadingPdf, setLoadingPdf]           = useState(false)
   const toast = useToast()
   const queryClient = useQueryClient()
 
@@ -140,16 +145,41 @@ function Expenses() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-beige-900">Depenses</h1>
-          <p className="text-beige-600 mt-1">
-            Suivez les sorties de caisse liees au fonctionnement du salon.
-          </p>
-        </div>
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          <InfoCard label="Depenses du mois" value={`${totalMois.toLocaleString('fr-FR')} FCFA`} />
-          <InfoCard label="Total depenses" value={depenses.length} tone="warning" />
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold text-beige-900">Depenses</h1>
+            <p className="text-beige-600 mt-1">Suivez les sorties de caisse liees au fonctionnement du salon.</p>
+          </div>
+          <div className="flex flex-wrap items-end gap-2">
+            <div>
+              <label className="block text-xs text-beige-500 mb-1">Du</label>
+              <input type="date" value={dateDebut} onChange={(e) => setDateDebut(e.target.value)}
+                className="px-3 py-2 text-sm border border-beige-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-beige-300" />
+            </div>
+            <div>
+              <label className="block text-xs text-beige-500 mb-1">Au</label>
+              <input type="date" value={dateFin} onChange={(e) => setDateFin(e.target.value)}
+                className="px-3 py-2 text-sm border border-beige-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-beige-300" />
+            </div>
+            <button type="button" disabled={loadingPdf}
+              onClick={async () => {
+                if (!dateDebut || !dateFin) return toast.error('Selectionnez une periode')
+                const results = depenses.filter((d) => d.date >= dateDebut && d.date <= dateFin)
+                if (results.length === 0) return toast.error('Aucune depense sur cette periode')
+                setLoadingPdf(true)
+                try { await generateListeDepenses(results, dateDebut, dateFin) }
+                catch { toast.error('Erreur PDF') }
+                finally { setLoadingPdf(false) }
+              }}
+              className="flex items-center gap-1.5 px-4 py-2 bg-beige-900 text-white text-sm rounded-lg hover:bg-beige-800 transition-colors disabled:opacity-50">
+              <FileDown size={14} /> {loadingPdf ? 'Generation...' : 'Visualiser'}
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <InfoCard label="Depenses du mois" value={`${totalMois.toLocaleString('fr-FR')} FCFA`} />
+            <InfoCard label="Total depenses" value={depenses.length} tone="warning" />
+          </div>
         </div>
       </div>
 
