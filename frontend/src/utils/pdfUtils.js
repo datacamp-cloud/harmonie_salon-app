@@ -385,7 +385,7 @@ export async function generateListeVentes(ventes, dateDebut, dateFin) {
 
   autoTable(doc, {
     startY: y,
-    head: [['Date', 'Client', 'Produits', 'Quantité', 'Total']],
+    head: [['Date', 'Client', 'Produits', 'Qté', 'Total']],
     body: ventesValidees.map((v) => [
       fdate(v.date),
       v.clientNom || 'Anonyme',
@@ -483,29 +483,27 @@ export async function generateListeDepenses(depenses, dateDebut, dateFin) {
 
   autoTable(doc, {
     startY: y,
-    head: [['Date', 'Charge', 'Montant', 'Notes']],
+    head: [['Date', 'Charge', 'Notes','Montant']],
     body: depensesValidees.map((d) => [
-      fdate(d.date), d.chargeNom, fcfa(d.montant), d.notes || '',
+      fdate(d.date), d.chargeNom, d.notes || '', fcfa(d.montant),
     ]),
     ...tableStyles,
     styles: { ...tableStyles.styles, fontSize: 8.5 },
     columnStyles: {
-      0: { cellWidth: 26 }, 1: { cellWidth: 48 },
+      0: { cellWidth: 26 },
       2: { halign: 'left', cellWidth: 42 },
     },
     didParseCell(data) {
       if (data.section === 'head') {
         if (data.column.index === 2) data.cell.styles.halign = 'left'
-        if (data.column.index === 3) data.cell.styles.halign = 'left' 
+        if (data.column.index === 3) data.cell.styles.halign = 'right'
       }
 
-      if (data.section === 'body') {
-        if (data.column.index === 3) data.cell.styles.halign = 'left' 
-      }
+      if (data.section === 'body' && data.column.index === 3) data.cell.styles.halign = 'right'
     },
   })
 
-  const finalY = doc.lastAutoTable.finalY + 4
+  const finalY = doc.lastAutoTable.finalY + 3
   doc.setFillColor(40, 40, 40)
   doc.rect(10, finalY, pageW - 20, 9, 'F')
   doc.setTextColor(255, 255, 255)
