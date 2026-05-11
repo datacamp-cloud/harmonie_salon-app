@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react'
+import { api } from '../api/client'
 
 const AuthContext = createContext(null)
 
@@ -10,7 +11,10 @@ export function AuthProvider({ children }) {
     try {
       const storedUser = localStorage.getItem('webstock_user')
       if (storedUser && storedUser !== 'undefined') {
-        setUser(JSON.parse(storedUser))
+        const userData = JSON.parse(storedUser)
+        setUser(userData)
+        // Restaurer le rôle dans mock.js après rechargement de page
+        api.setRole?.(userData.role)
       }
     } catch {
       localStorage.removeItem('webstock_user')
@@ -22,10 +26,12 @@ export function AuthProvider({ children }) {
 
   const login = (userData) => {
     setUser(userData)
+    api.setRole?.(userData.role)
     localStorage.setItem('webstock_user', JSON.stringify(userData))
   }
 
   const logout = () => {
+    api.logout()
     setUser(null)
     localStorage.removeItem('webstock_user')
     localStorage.removeItem('webstock_token')
