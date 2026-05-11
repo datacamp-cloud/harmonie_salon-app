@@ -380,19 +380,18 @@ export async function generateListeVentes(ventes, dateDebut, dateFin) {
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
   doc.setTextColor(80, 80, 80)
-  doc.text(`${ventes.length} vente(s)  |  Validees : ${ventesValidees.length}  |  Montant total : ${fcfa(total)}`, 10, y)
+  doc.text(`${ventesValidees.length} vente(s) validee(s)  |  Montant total : ${fcfa(total)}`, 10, y)
   y += 8
 
   autoTable(doc, {
     startY: y,
-    head: [['Date', 'Client', 'Produits', 'Qte', 'Total', 'Statut']],
-    body: ventes.map((v) => [
+    head: [['Date', 'Client', 'Produits', 'Quantité', 'Total']],
+    body: ventesValidees.map((v) => [
       fdate(v.date),
       v.clientNom || 'Anonyme',
       v.items?.map((i) => i.produitNom).join(', ') || '',
       String(v.totalQuantite || 0),
       fcfa(v.total),
-      v.isValidated ? 'Validee' : 'En attente',
     ]),
     ...tableStyles,
     styles: { ...tableStyles.styles, fontSize: 8 },
@@ -400,17 +399,11 @@ export async function generateListeVentes(ventes, dateDebut, dateFin) {
       0: { cellWidth: 24 }, 1: { cellWidth: 40 },
       3: { halign: 'center', cellWidth: 16 },
       4: { halign: 'right', cellWidth: 38 },
-      5: { halign: 'center', cellWidth: 24 },
     },
     didParseCell(data) {
       if (data.section === 'head') {
         if (data.column.index === 3) data.cell.styles.halign = 'center'
         if (data.column.index === 4) data.cell.styles.halign = 'right'
-        if (data.column.index === 5) data.cell.styles.halign = 'center'
-      }
-      if (data.column.index === 5 && data.section === 'body') {
-        data.cell.styles.textColor = data.cell.raw === 'Validee' ? [30, 130, 70] : [160, 100, 0]
-        data.cell.styles.fontStyle = 'bold'
       }
     },
   })
@@ -421,7 +414,7 @@ export async function generateListeVentes(ventes, dateDebut, dateFin) {
   doc.setTextColor(255, 255, 255)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9)
-  doc.text(`TOTAL : ${fcfa(total)}`, pageW - 14, finalY + 6, { align: 'right' })
+  doc.text(`${fcfa(total)}`, pageW - 14, finalY + 6, { align: 'right' })
   addFooter(doc)
   const url = doc.output('bloburl')
   window.open(url, '_blank')
@@ -439,31 +432,24 @@ export async function generateListeRecettes(recettes, dateDebut, dateFin) {
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
   doc.setTextColor(80, 80, 80)
-  doc.text(`${recettes.length} recette(s)  |  Validees : ${recettesValidees.length}  |  Montant total : ${fcfa(total)}`, 10, y)
+  doc.text(`${recettesValidees.length} recette(s) validee(s)  |  Montant total : ${fcfa(total)}`, 10, y)
   y += 8
 
   autoTable(doc, {
     startY: y,
-    head: [['Date', 'Prestation', 'Client', 'Prix applique', 'Statut']],
-    body: recettes.map((r) => [
-      fdate(r.date), r.prestationNom, r.clientNom || 'Anonyme',
-      fcfa(r.prixApplique), r.isValidated ? 'Validee' : 'En attente',
+    head: [['Date', 'Prestation', 'Client', 'Prix applique']],
+    body: recettesValidees.map((r) => [
+      fdate(r.date), r.prestationNom, r.clientNom || 'Anonyme', fcfa(r.prixApplique || 0),
     ]),
     ...tableStyles,
     styles: { ...tableStyles.styles, fontSize: 8.5 },
     columnStyles: {
       0: { cellWidth: 26 },
       3: { halign: 'right', cellWidth: 42 },
-      4: { halign: 'center', cellWidth: 26 },
     },
     didParseCell(data) {
       if (data.section === 'head') {
         if (data.column.index === 3) data.cell.styles.halign = 'right'
-        if (data.column.index === 4) data.cell.styles.halign = 'center'
-      }
-      if (data.column.index === 4 && data.section === 'body') {
-        data.cell.styles.textColor = data.cell.raw === 'Validee' ? [30, 130, 70] : [160, 100, 0]
-        data.cell.styles.fontStyle = 'bold'
       }
     },
   })
@@ -474,7 +460,7 @@ export async function generateListeRecettes(recettes, dateDebut, dateFin) {
   doc.setTextColor(255, 255, 255)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9)
-  doc.text(`TOTAL : ${fcfa(total)}`, pageW - 14, finalY + 6, { align: 'right' })
+  doc.text(`${fcfa(total)}`, pageW - 14, finalY + 6, { align: 'right' })
   addFooter(doc)
   const urlRec = doc.output('bloburl')
   window.open(urlRec, '_blank')
@@ -492,31 +478,29 @@ export async function generateListeDepenses(depenses, dateDebut, dateFin) {
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
   doc.setTextColor(80, 80, 80)
-  doc.text(`${depenses.length} depense(s)  |  Validees : ${depensesValidees.length}  |  Montant total : ${fcfa(total)}`, 10, y)
+  doc.text(`${depensesValidees.length} depense(s) validee(s) |  Montant total : ${fcfa(total)}`, 10, y)
   y += 8
 
   autoTable(doc, {
     startY: y,
-    head: [['Date', 'Charge', 'Montant', 'Notes', 'Statut']],
-    body: depenses.map((d) => [
+    head: [['Date', 'Charge', 'Montant', 'Notes']],
+    body: depensesValidees.map((d) => [
       fdate(d.date), d.chargeNom, fcfa(d.montant), d.notes || '',
-      d.isValidated ? 'Validee' : 'En attente',
     ]),
     ...tableStyles,
     styles: { ...tableStyles.styles, fontSize: 8.5 },
     columnStyles: {
       0: { cellWidth: 26 }, 1: { cellWidth: 48 },
-      2: { halign: 'right', cellWidth: 42 },
-      4: { halign: 'center', cellWidth: 26 },
+      2: { halign: 'left', cellWidth: 42 },
     },
     didParseCell(data) {
       if (data.section === 'head') {
-        if (data.column.index === 2) data.cell.styles.halign = 'right'
-        if (data.column.index === 4) data.cell.styles.halign = 'center'
+        if (data.column.index === 2) data.cell.styles.halign = 'left'
+        if (data.column.index === 3) data.cell.styles.halign = 'left' 
       }
-      if (data.column.index === 4 && data.section === 'body') {
-        data.cell.styles.textColor = data.cell.raw === 'Validee' ? [30, 130, 70] : [160, 100, 0]
-        data.cell.styles.fontStyle = 'bold'
+
+      if (data.section === 'body') {
+        if (data.column.index === 3) data.cell.styles.halign = 'left' 
       }
     },
   })
@@ -527,7 +511,7 @@ export async function generateListeDepenses(depenses, dateDebut, dateFin) {
   doc.setTextColor(255, 255, 255)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9)
-  doc.text(`TOTAL : ${fcfa(total)}`, pageW - 14, finalY + 6, { align: 'right' })
+  doc.text(`${fcfa(total)}`, pageW - 14, finalY + 6, { align: 'right' })
   addFooter(doc)
   const urlDep = doc.output('bloburl')
   window.open(urlDep, '_blank')
