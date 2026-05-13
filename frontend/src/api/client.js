@@ -6,4 +6,4 @@
 //   Remplacer l'import ci-dessous par : export { api } from './http'
 // ─────────────────────────────────────────────────────────────────────────────
 
-export { api } from './mock'
+export { api } from './supabase-api'
