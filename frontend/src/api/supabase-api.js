@@ -90,6 +90,8 @@ export const api = {
   },
 
   deleteFournisseur: async (id) => {
+    const { data: existing } = await supabase.from('fournisseurs').select('*').eq('id', id).single()
+    await archiver('fournisseur', id, existing)
     const { error } = await supabase.from('fournisseurs').delete().eq('id', id)
     if (error) return sbErr(error)
     return { message: 'Fournisseur supprime' }
@@ -132,6 +134,8 @@ export const api = {
   },
 
   deleteTypeProduit: async (id) => {
+    const { data: existing } = await supabase.from('types_produits').select('*').eq('id', id).single()
+    await archiver('type_produit', id, existing)
     const { error } = await supabase.from('types_produits').delete().eq('id', id)
     if (error) return sbErr(error)
     return { message: 'Type supprime' }
@@ -174,6 +178,8 @@ export const api = {
   },
 
   deleteProduit: async (id) => {
+    const { data: existing } = await supabase.from('produits').select('*').eq('id', id).single()
+    await archiver('produit', id, existing)
     const { error } = await supabase.from('produits').delete().eq('id', id)
     if (error) return sbErr(error)
     return { message: 'Produit supprime' }
@@ -206,6 +212,8 @@ export const api = {
   },
 
   deletePrestation: async (id) => {
+    const { data: existing } = await supabase.from('prestations').select('*').eq('id', id).single()
+    await archiver('prestation', id, existing)
     const { error } = await supabase.from('prestations').delete().eq('id', id)
     if (error) return sbErr(error)
     return { message: 'Prestation supprimee' }
@@ -238,6 +246,8 @@ export const api = {
   },
 
   deleteCharge: async (id) => {
+    const { data: existing } = await supabase.from('charges').select('*').eq('id', id).single()
+    await archiver('charge', id, existing)
     const { error } = await supabase.from('charges').delete().eq('id', id)
     if (error) return sbErr(error)
     return { message: 'Charge supprimee' }
@@ -270,6 +280,10 @@ export const api = {
   },
 
   deleteClient: async (id) => {
+    const { data: existing } = await supabase.from('clients').select('*').eq('id', id).single()
+
+    await archiver('client', id, existing)
+
     const { error } = await supabase.from('clients').delete().eq('id', id)
     if (error) return sbErr(error)
     return { message: 'Client supprime' }
@@ -314,6 +328,9 @@ export const api = {
   deleteArrivage: async (id) => {
     const { data: existing } = await supabase.from('arrivages').select('is_validated').eq('id', id).single()
     if (existing.is_validated && !canModifyValidated()) return sbErr({ message: 'Un arrivage valide ne peut pas etre supprime' })
+    
+    await archiver('arrivage', id, existing)
+
     const { error } = await supabase.from('arrivages').delete().eq('id', id)
     if (error) return sbErr(error)
     return { message: 'Arrivage supprime' }
@@ -355,8 +372,17 @@ export const api = {
   },
 
   deleteVente: async (id) => {
-    const { data: existing } = await supabase.from('ventes').select('is_validated').eq('id', id).single()
+    const { data: existing } = await supabase
+      .from('ventes')
+      .select('is_validated')
+      .eq('id', id)
+      .single()
+
     if (existing.is_validated && !canModifyValidated()) return sbErr({ message: 'Une vente validee ne peut pas etre supprimee' })
+    
+      //archiver avant suppression
+    await archiver('vente', id, existing)
+    
     const { error } = await supabase.from('ventes').delete().eq('id', id)
     if (error) return sbErr(error)
     return { message: 'Vente supprimee' }
@@ -395,6 +421,9 @@ export const api = {
   deleteRecette: async (id) => {
     const { data: existing } = await supabase.from('recettes').select('is_validated').eq('id', id).single()
     if (existing.is_validated && !canModifyValidated()) return sbErr({ message: 'Une recette validee ne peut pas etre supprimee' })
+    
+    await archiver('recette', id, existing)
+
     const { error } = await supabase.from('recettes').delete().eq('id', id)
     if (error) return sbErr(error)
     return { message: 'Recette supprimee' }
@@ -433,6 +462,9 @@ export const api = {
   deleteDepense: async (id) => {
     const { data: existing } = await supabase.from('depenses').select('is_validated').eq('id', id).single()
     if (existing.is_validated && !canModifyValidated()) return sbErr({ message: 'Une depense validee ne peut pas etre supprimee' })
+    
+    await archiver('depense', id, existing)
+
     const { error } = await supabase.from('depenses').delete().eq('id', id)
     if (error) return sbErr(error)
     return { message: 'Depense supprimee' }
@@ -542,6 +574,15 @@ export const api = {
   },
 }
 
+// Helper archivage — à ajouter avant les helpers de formatage
+async function archiver(type, id, data) {
+  await supabase.from('archives').insert({
+    type,
+    reference_id: id,
+    data,
+  })
+}
+
 // ─── Helpers de formatage ─────────────────────────────────────────────────────
 function formatArrivage(a) {
   const items = (a.arrivage_lignes || []).map((l) => ({
@@ -581,3 +622,4 @@ async function computeStocks() {
   ;(inventaires.data || []).forEach((i) => { stocks[i.produit_id] = (stocks[i.produit_id] || 0) + i.ecart })
   return stocks
 }
+
