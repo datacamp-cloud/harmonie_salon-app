@@ -510,7 +510,7 @@ function Sales() {
                           <Trash2 size={13} /> Supprimer
                         </button>
                       )}
-                      {(!vente.isValidated || isSuperAdmin()) && (
+                      {!vente.isValidated && (
                         <button
                           type="button"
                           onClick={() => setConfirmValidate(vente.id)}
