@@ -485,9 +485,9 @@ export const api = {
   },
 
   deleteInventaire: async (id) => {
+    if (!isSuperAdmin()) return sbErr({ message: 'Action reservee au super administrateur' })
     const { data: existing, error } = await supabase.from('inventaires').select('*').eq('id', id).single()
     if (error) return sbErr(error)
-    if (existing.is_validated && !canModifyValidated()) return sbErr({ message: 'Un inventaire valide ne peut pas etre supprime' })
     await archiver('inventaire', id, { record: existing })
     const { error: deleteError } = await supabase.from('inventaires').delete().eq('id', id)
     if (deleteError) return sbErr(deleteError)
