@@ -1,13 +1,7 @@
 import { supabase } from '../utils/supabase'
 import { load, save } from './storage'
 
-// ─── Superadmin (secret, hors Supabase) ──────────────────────────────────────
-const SUPERADMIN = {
-  pseudo:   'ws_superadmin',
-  password: 'W3bSt0ck@@Harmonie2026',
-  name:     'Super Admin',
-  role:     'superadmin',
-}
+// Le superadmin doit disposer d'un compte Supabase Auth et d'un profil role=superadmin.
 
 // ─── Correspondance pseudo → email Supabase ───────────────────────────────────
 function pseudoToEmail(pseudo) {
@@ -32,12 +26,6 @@ export const api = {
 
   // ── Auth ──────────────────────────────────────────────────────────────────
   login: async (pseudo, password) => {
-    // Superadmin — vérifié en local
-    if (pseudo === SUPERADMIN.pseudo && password === SUPERADMIN.password) {
-      currentUserRole = 'superadmin'
-      return { user: { id: 0, pseudo: SUPERADMIN.pseudo, name: SUPERADMIN.name, role: 'superadmin' }, token: 'superadmin-token' }
-    }
-
     const email = pseudoToEmail(pseudo)
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) return sbErr({ message: 'Identifiant ou mot de passe incorrect' })
@@ -326,14 +314,17 @@ export const api = {
   },
 
   deleteArrivage: async (id) => {
-    const { data: existing } = await supabase.from('arrivages').select('is_validated').eq('id', id).single()
+    const { data: existing, error: recordError } = await supabase.from('arrivages').select('*').eq('id', id).single()
+    if (recordError) return sbErr(recordError)
     if (existing.is_validated && !canModifyValidated()) return sbErr({ message: 'Un arrivage valide ne peut pas etre supprime' })
-    
-    await archiver('arrivage', id, existing)
-
+    const { data: lines, error: linesError } = await supabase.from('arrivage_lignes').select('*').eq('arrivage_id', id)
+    if (linesError) return sbErr(linesError)
+    await archiver('arrivage', id, { record: existing, lines: lines || [] })
+    const { error: deleteLinesError } = await supabase.from('arrivage_lignes').delete().eq('arrivage_id', id)
+    if (deleteLinesError) return sbErr(deleteLinesError)
     const { error } = await supabase.from('arrivages').delete().eq('id', id)
     if (error) return sbErr(error)
-    return { message: 'Arrivage supprime' }
+    return { message: 'Arrivage archive' }
   },
 
   // ── Ventes ────────────────────────────────────────────────────────────────
@@ -372,20 +363,17 @@ export const api = {
   },
 
   deleteVente: async (id) => {
-    const { data: existing } = await supabase
-      .from('ventes')
-      .select('is_validated')
-      .eq('id', id)
-      .single()
-
+    const { data: existing, error: recordError } = await supabase.from('ventes').select('*').eq('id', id).single()
+    if (recordError) return sbErr(recordError)
     if (existing.is_validated && !canModifyValidated()) return sbErr({ message: 'Une vente validee ne peut pas etre supprimee' })
-    
-      //archiver avant suppression
-    await archiver('vente', id, existing)
-    
+    const { data: lines, error: linesError } = await supabase.from('vente_lignes').select('*').eq('vente_id', id)
+    if (linesError) return sbErr(linesError)
+    await archiver('vente', id, { record: existing, lines: lines || [] })
+    const { error: deleteLinesError } = await supabase.from('vente_lignes').delete().eq('vente_id', id)
+    if (deleteLinesError) return sbErr(deleteLinesError)
     const { error } = await supabase.from('ventes').delete().eq('id', id)
     if (error) return sbErr(error)
-    return { message: 'Vente supprimee' }
+    return { message: 'Vente archivee' }
   },
 
   // ── Recettes ──────────────────────────────────────────────────────────────
@@ -419,14 +407,13 @@ export const api = {
   },
 
   deleteRecette: async (id) => {
-    const { data: existing } = await supabase.from('recettes').select('is_validated').eq('id', id).single()
+    const { data: existing, error: recordError } = await supabase.from('recettes').select('*').eq('id', id).single()
+    if (recordError) return sbErr(recordError)
     if (existing.is_validated && !canModifyValidated()) return sbErr({ message: 'Une recette validee ne peut pas etre supprimee' })
-    
-    await archiver('recette', id, existing)
-
+    await archiver('recette', id, { record: existing })
     const { error } = await supabase.from('recettes').delete().eq('id', id)
     if (error) return sbErr(error)
-    return { message: 'Recette supprimee' }
+    return { message: 'Recette archivee' }
   },
 
   // ── Dépenses ──────────────────────────────────────────────────────────────
@@ -460,14 +447,13 @@ export const api = {
   },
 
   deleteDepense: async (id) => {
-    const { data: existing } = await supabase.from('depenses').select('is_validated').eq('id', id).single()
+    const { data: existing, error: recordError } = await supabase.from('depenses').select('*').eq('id', id).single()
+    if (recordError) return sbErr(recordError)
     if (existing.is_validated && !canModifyValidated()) return sbErr({ message: 'Une depense validee ne peut pas etre supprimee' })
-    
-    await archiver('depense', id, existing)
-
+    await archiver('depense', id, { record: existing })
     const { error } = await supabase.from('depenses').delete().eq('id', id)
     if (error) return sbErr(error)
-    return { message: 'Depense supprimee' }
+    return { message: 'Depense archivee' }
   },
 
   // ── Inventaires ───────────────────────────────────────────────────────────
@@ -487,12 +473,25 @@ export const api = {
   },
 
   updateInventaire: async ({ id, date, produitId, quantitePhysique }) => {
+    const { data: existing, error: recordError } = await supabase.from('inventaires').select('is_validated').eq('id', id).single()
+    if (recordError) return sbErr(recordError)
+    if (existing.is_validated && !canModifyValidated()) return sbErr({ message: 'Un inventaire valide ne peut pas etre modifie' })
     const stocks = await computeStocks()
     const stockTheorique = stocks[produitId] || 0
     const ecart = quantitePhysique - stockTheorique
     const { error } = await supabase.from('inventaires').update({ date, produit_id: produitId, quantite_physique: quantitePhysique, stock_theorique: stockTheorique, ecart }).eq('id', id)
     if (error) return sbErr(error)
     return api.getInventaires().then((arr) => arr.find((i) => i.id === id))
+  },
+
+  deleteInventaire: async (id) => {
+    const { data: existing, error } = await supabase.from('inventaires').select('*').eq('id', id).single()
+    if (error) return sbErr(error)
+    if (existing.is_validated && !canModifyValidated()) return sbErr({ message: 'Un inventaire valide ne peut pas etre supprime' })
+    await archiver('inventaire', id, { record: existing })
+    const { error: deleteError } = await supabase.from('inventaires').delete().eq('id', id)
+    if (deleteError) return sbErr(deleteError)
+    return { message: 'Inventaire archive' }
   },
 
   // ── Stats ─────────────────────────────────────────────────────────────────
@@ -536,6 +535,43 @@ export const api = {
     return data.map((h) => ({ id: h.id, titre: h.titre, description: h.description, date: h.date }))
   },
 
+  // ── Archives (superadmin) ─────────────────────────────────────────────────
+  getArchives: async () => {
+    if (!isSuperAdmin()) return sbErr({ message: 'Acces reserve au super administrateur' })
+    const { data, error } = await supabase.from('archives').select('*').order('created_at', { ascending: false })
+    if (error) return sbErr(error)
+    return data || []
+  },
+
+  restoreArchive: async (archiveId) => {
+    if (!isSuperAdmin()) return sbErr({ message: 'Acces reserve au super administrateur' })
+    const { data: archive, error } = await supabase.from('archives').select('*').eq('id', archiveId).single()
+    if (error) return sbErr(error)
+    if (archive.restored_at) return sbErr({ message: 'Cette archive a deja ete restauree' })
+    const snapshot = archive.data || {}
+    const record = snapshot.record || snapshot
+    const lines = snapshot.lines || []
+    let table
+    let childTable = null
+    if (archive.type === 'arrivage') { table = 'arrivages'; childTable = 'arrivage_lignes' }
+    else if (archive.type === 'vente') { table = 'ventes'; childTable = 'vente_lignes' }
+    else if (archive.type === 'recette') table = 'recettes'
+    else if (archive.type === 'depense') table = 'depenses'
+    else if (archive.type === 'inventaire') table = 'inventaires'
+    else return sbErr({ message: 'Type d archive non pris en charge' })
+    const { error: restoreError } = await supabase.from(table).insert(record)
+    if (restoreError) return sbErr(restoreError)
+    if (childTable && lines.length) {
+      const restoredLines = lines.map(({ id: _id, ...line }) => line)
+      const { error: linesError } = await supabase.from(childTable).insert(restoredLines)
+      if (linesError) return sbErr(linesError)
+    }
+    const { error: markError } = await supabase.from('archives').update({ restored_at: new Date().toISOString() }).eq('id', archiveId)
+    if (markError) return sbErr(markError)
+    await supabase.from('historique').insert({ titre: 'Archive restauree', description: `${archive.type} #${archive.reference_id} restaure.` })
+    return { message: 'Archive restauree' }
+  },
+
   // ── Utilisateurs ──────────────────────────────────────────────────────────
   getUsers: async () => {
     const { data, error } = await supabase.from('profiles').select('*').neq('role', 'superadmin').order('name')
@@ -576,11 +612,8 @@ export const api = {
 
 // Helper archivage — à ajouter avant les helpers de formatage
 async function archiver(type, id, data) {
-  await supabase.from('archives').insert({
-    type,
-    reference_id: id,
-    data,
-  })
+  const { error } = await supabase.from('archives').insert({ type, reference_id: id, data })
+  if (error) throw new Error(`Archivage impossible : ${error.message}`)
 }
 
 // ─── Helpers de formatage ─────────────────────────────────────────────────────
