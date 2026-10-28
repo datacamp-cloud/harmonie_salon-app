@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { isSuperAdmin } from '../api/supabase-api'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, CheckCircle2, FileDown, Loader2, Pencil, Plus, ShoppingCart, Trash2, X } from 'lucide-react'
 import { api } from '../api/client'
@@ -496,20 +497,20 @@ function Sales() {
                           <FileDown size={13} /> Reçu
                         </button>
                       )}
-                      {!vente.isValidated && (
+                      {(!vente.isValidated || isSuperAdmin()) && (
                         <button type="button" onClick={() => handleEdit(vente)}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-beige-300 text-beige-700 text-xs hover:bg-white transition-colors">
                           <Pencil size={13} /> Modifier
                         </button>
                       )}
-                      {!vente.isValidated && (
+                      {(!vente.isValidated || isSuperAdmin()) && (
                         <button type="button" onClick={() => setConfirmDelete(vente.id)}
                           disabled={deleteMutation.isPending}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-xs transition-colors disabled:opacity-50">
                           <Trash2 size={13} /> Supprimer
                         </button>
                       )}
-                      {!vente.isValidated && (
+                      {(!vente.isValidated || isSuperAdmin()) && (
                         <button
                           type="button"
                           onClick={() => setConfirmValidate(vente.id)}
