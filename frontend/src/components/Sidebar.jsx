@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronRight,
   ClipboardList,
+  Archive,
   Clock,
   FileText,
   Layers,
@@ -52,6 +53,11 @@ function Sidebar() {
   const navigate = useNavigate()
   const location = useLocation()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+
+  const visibleNavItems = useMemo(
+    () => user?.role === 'superadmin' ? [...navItems, { path: '/archives', label: 'Archives', icon: Archive }] : navItems,
+    [user],
+  )
 
   const allSettingsItems = useMemo(
     () => user?.role === 'admin' ? [...settingsItems, ...adminSettingsItems] : settingsItems,
@@ -176,7 +182,7 @@ function Sidebar() {
             </li>
 
             {/* Reste des menus */}
-            {navItems.filter((item) => item.path !== '/').map((item) => (
+            {visibleNavItems.filter((item) => item.path !== '/').map((item) => (
               <li key={item.path}>
                 <NavLink
                   to={item.path}
