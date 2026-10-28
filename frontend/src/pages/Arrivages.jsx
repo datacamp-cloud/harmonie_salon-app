@@ -391,7 +391,7 @@ function Arrivages() {
                           <Trash2 size={13} /> Supprimer
                         </button>
                       )}
-                      {(!arrivage.isValidated || isSuperAdmin()) && (
+                      {!arrivage.isValidated && (
                         <button
                           type="button"
                           onClick={() => setConfirmValidate(arrivage.id)}
