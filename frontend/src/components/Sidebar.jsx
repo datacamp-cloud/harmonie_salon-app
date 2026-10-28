@@ -60,7 +60,7 @@ function Sidebar() {
   )
 
   const allSettingsItems = useMemo(
-    () => user?.role === 'admin' ? [...settingsItems, ...adminSettingsItems] : settingsItems,
+    () => ['admin', 'superadmin'].includes(user?.role) ? [...settingsItems, ...adminSettingsItems] : settingsItems,
     [user],
   )
 
