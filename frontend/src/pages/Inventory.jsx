@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { isSuperAdmin } from '../api/supabase-api'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ClipboardList, Loader2, Pencil, Plus, X } from 'lucide-react'
+import { ClipboardList, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { api } from '../api/client'
 import { useToast } from '../context/ToastContext'
 import { formatDate } from '../utils/date'
@@ -63,6 +63,20 @@ function Inventory() {
       toast.success('Inventaire modifie avec succes')
     },
     onError: (error) => toast.error(error.message || 'Erreur modification'),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: api.deleteInventaire,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['inventaires'] }),
+        queryClient.invalidateQueries({ queryKey: ['produits'] }),
+        queryClient.invalidateQueries({ queryKey: ['stats'] }),
+        queryClient.invalidateQueries({ queryKey: ['archives'] }),
+      ])
+      toast.success('Inventaire archive')
+    },
+    onError: (error) => toast.error(error.message || 'Erreur lors de l archivage'),
   })
 
   const handleEdit = (inventaire) => {
@@ -246,6 +260,20 @@ function Inventory() {
                         <button type="button" onClick={() => handleEdit(inventaire)}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-beige-300 text-beige-700 text-xs hover:bg-white transition-colors">
                           <Pencil size={13} /> Modifier
+                        </button>
+                      )}
+                      {isSuperAdmin() && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm('Archiver cet inventaire ? Il pourra etre restaure depuis les archives.')) {
+                              deleteMutation.mutate(inventaire.id)
+                            }
+                          }}
+                          disabled={deleteMutation.isPending}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 text-red-600 text-xs hover:bg-red-50 disabled:opacity-50 transition-colors"
+                        >
+                          <Trash2 size={13} /> Archiver
                         </button>
                       )}
                       <span
