@@ -71,6 +71,7 @@ function Archives() {
           {archives.map((archive) => {
             const snapshot = archive.data?.record || archive.data || {}
             const restored = Boolean(archive.restored_at)
+            const canRestore = Boolean(archive.data?.record) || (!['arrivage', 'vente', 'recette', 'depense', 'inventaire'].includes(archive.type) && Object.keys(archive.data || {}).length > 1)
             const date = archive.created_at ? new Date(archive.created_at).toLocaleString('fr-FR') : 'Date inconnue'
             const description = snapshot.date || snapshot.notes || snapshot.nom || snapshot.montant || snapshot.prix_applique
             return (
@@ -79,7 +80,7 @@ function Archives() {
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-medium text-beige-900">{LABELS[archive.type] || archive.type} #{archive.reference_id}</p>
                     <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${restored ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-800'}`}>
-                      {restored ? 'Restauree' : 'Archivee'}
+                      {restored ? 'Restauree' : canRestore ? 'Archivee' : 'Archive incomplete'}
                     </span>
                   </div>
                   <p className="mt-1 text-sm text-beige-600">
@@ -88,8 +89,11 @@ function Archives() {
                   {Array.isArray(archive.data?.lines) && (
                     <p className="mt-1 text-xs text-beige-500">{archive.data.lines.length} ligne(s) detaillee(s) conservee(s)</p>
                   )}
+                  {!canRestore && !restored && (
+                    <p className="mt-1 text-xs text-amber-700">Cette ancienne archive ne contient pas assez de donnees pour une restauration fiable.</p>
+                  )}
                 </div>
-                {!restored && (
+                {!restored && canRestore && (
                   <button
                     type="button"
                     onClick={() => {
