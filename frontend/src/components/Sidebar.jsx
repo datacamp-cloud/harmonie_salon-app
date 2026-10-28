@@ -214,7 +214,7 @@ function Sidebar() {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-beige-900 truncate">{user?.pseudo || 'Utilisateur'}</p>
               <p className="text-xs text-beige-500 truncate">
-                {user?.role === 'admin' ? 'Administrateur' : user?.role === 'caissier' ? 'Caissier' : user?.role || ''}
+                {user?.role === 'superadmin' ? 'Super administrateur' : user?.role === 'admin' ? 'Administrateur' : user?.role === 'caissier' ? 'Caissier' : user?.role || ''}
               </p>
             </div>
           </div>
