@@ -68,7 +68,7 @@ function AppRoutes() {
         <Route path="parametres/produits" element={<Products />} /> 
         <Route path="parametres/charges" element={<Charges />} />
         <Route path="parametres/clients" element={<Clients />} />
-        <Route path="parametres/utilisateurs" element={user?.role === 'admin' ? <UsersPage /> : <Navigate to="/" replace />} />
+        <Route path="parametres/utilisateurs" element={['admin', 'superadmin'].includes(user?.role) ? <UsersPage /> : <Navigate to="/" replace />} />
         <Route path="archives" element={user?.role === 'superadmin' ? <Archives /> : <Navigate to="/" replace />} />
        
       </Route>
