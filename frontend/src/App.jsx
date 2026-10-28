@@ -16,6 +16,7 @@ import Services from './pages/settings/Services'
 import Charges from './pages/settings/Charges'
 import Clients from './pages/settings/Customers'
 import UsersPage from './pages/settings/Users'
+import Archives from './pages/Archives'
 import Layout from './components/Layout'
 
 function ProtectedRoute({ children }) {
@@ -67,7 +68,8 @@ function AppRoutes() {
         <Route path="parametres/produits" element={<Products />} /> 
         <Route path="parametres/charges" element={<Charges />} />
         <Route path="parametres/clients" element={<Clients />} />
-        <Route path="parametres/utilisateurs" element={<UsersPage />} />
+        <Route path="parametres/utilisateurs" element={user?.role === 'admin' ? <UsersPage /> : <Navigate to="/" replace />} />
+        <Route path="archives" element={user?.role === 'superadmin' ? <Archives /> : <Navigate to="/" replace />} />
        
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
