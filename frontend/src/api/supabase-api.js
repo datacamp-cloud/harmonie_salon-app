@@ -559,12 +559,27 @@ export const api = {
     else if (archive.type === 'depense') table = 'depenses'
     else if (archive.type === 'inventaire') table = 'inventaires'
     else return sbErr({ message: 'Type d archive non pris en charge' })
-    const { error: restoreError } = await supabase.from(table).insert(record)
+    // Les colonnes id sont générées par PostgreSQL (IDENTITY) : ne pas réinsérer l'ancien id.
+    // Les lignes enfants doivent pointer vers le nouvel identifiant du parent restauré.
+    const { id: _oldRecordId, ...recordWithoutId } = record
+    const { data: restoredRecord, error: restoreError } = await supabase
+      .from(table)
+      .insert(recordWithoutId)
+      .select()
+      .single()
     if (restoreError) return sbErr(restoreError)
     if (childTable && lines.length) {
-      const restoredLines = lines.map(({ id: _id, ...line }) => line)
+      const parentKey = archive.type === 'vente' ? 'vente_id' : 'arrivage_id'
+      const restoredLines = lines.map(({ id: _oldLineId, [parentKey]: _oldParentId, ...line }) => ({
+        ...line,
+        [parentKey]: restoredRecord.id,
+      }))
       const { error: linesError } = await supabase.from(childTable).insert(restoredLines)
-      if (linesError) return sbErr(linesError)
+      if (linesError) {
+        // Éviter de laisser un parent restauré sans ses lignes.
+        await supabase.from(table).delete().eq('id', restoredRecord.id)
+        return sbErr(linesError)
+      }
     }
     const { error: markError } = await supabase.from('archives').update({ restored_at: new Date().toISOString() }).eq('id', archiveId)
     if (markError) return sbErr(markError)
