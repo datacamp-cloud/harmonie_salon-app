@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { isSuperAdmin } from '../api/supabase-api'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ClipboardList, Loader2, Pencil, Plus, X } from 'lucide-react'
 import { api } from '../api/client'
@@ -241,7 +242,7 @@ function Inventory() {
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      {!inventaire.isValidated && (
+                      {(!inventaire.isValidated || isSuperAdmin()) && (
                         <button type="button" onClick={() => handleEdit(inventaire)}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-beige-300 text-beige-700 text-xs hover:bg-white transition-colors">
                           <Pencil size={13} /> Modifier
