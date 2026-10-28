@@ -348,7 +348,7 @@ function Expenses() {
                           <Trash2 size={13} /> Supprimer
                         </button>
                       )}
-                      {(!depense.isValidated || isSuperAdmin()) && (
+                      {!depense.isValidated && (
                         <button type="button" onClick={() => setConfirmValidate(depense.id)}
                           disabled={validateMutation.isPending}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 text-white text-xs font-medium hover:bg-green-700 transition-colors disabled:opacity-50">
