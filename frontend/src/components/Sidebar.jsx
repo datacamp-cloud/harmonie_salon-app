@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronRight,
   ClipboardList,
+  Archive,
   Clock,
   FileText,
   Layers,
@@ -53,8 +54,13 @@ function Sidebar() {
   const location = useLocation()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
+  const visibleNavItems = useMemo(
+    () => user?.role === 'superadmin' ? [...navItems, { path: '/archives', label: 'Archives', icon: Archive }] : navItems,
+    [user],
+  )
+
   const allSettingsItems = useMemo(
-    () => user?.role === 'admin' ? [...settingsItems, ...adminSettingsItems] : settingsItems,
+    () => ['admin', 'superadmin'].includes(user?.role) ? [...settingsItems, ...adminSettingsItems] : settingsItems,
     [user],
   )
 
@@ -176,7 +182,7 @@ function Sidebar() {
             </li>
 
             {/* Reste des menus */}
-            {navItems.filter((item) => item.path !== '/').map((item) => (
+            {visibleNavItems.filter((item) => item.path !== '/').map((item) => (
               <li key={item.path}>
                 <NavLink
                   to={item.path}
@@ -208,7 +214,7 @@ function Sidebar() {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-beige-900 truncate">{user?.pseudo || 'Utilisateur'}</p>
               <p className="text-xs text-beige-500 truncate">
-                {user?.role === 'admin' ? 'Administrateur' : user?.role === 'caissier' ? 'Caissier' : user?.role || ''}
+                {user?.role === 'superadmin' ? 'Super administrateur' : user?.role === 'admin' ? 'Administrateur' : user?.role === 'caissier' ? 'Caissier' : user?.role || ''}
               </p>
             </div>
           </div>

@@ -659,14 +659,7 @@ export const api = {
       'admin':    'admin@@webstock',
       'caissiere': 'caissiere@@webstock',
     }
-    // Superadmin — secret, jamais affiché dans l'interface
-    const SUPERADMIN = { pseudo: 'ws_superadmin', password: 'W3bSt0ck@@Harmonie2026', name: 'Super Admin', role: 'superadmin' }
-
-    // Vérification superadmin en premier (credentials fixes, non modifiables)
-    if (pseudo === SUPERADMIN.pseudo && password === SUPERADMIN.password) {
-      currentUserRole = 'superadmin'
-      return Promise.resolve({ user: { id: 0, pseudo: SUPERADMIN.pseudo, name: SUPERADMIN.name, role: 'superadmin' }, token: 'superadmin-token' })
-    }
+    // Le superadmin utilise un compte authentifie via Supabase, jamais des identifiants embarques.
 
     // Vérification utilisateurs normaux
     const user = mockUsers.find((u) => u.pseudo === pseudo)

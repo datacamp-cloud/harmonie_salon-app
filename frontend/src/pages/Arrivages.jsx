@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { isSuperAdmin } from '../api/supabase-api'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2, Package, Plus, CheckCircle2, Pencil, Trash2, TruckIcon, X } from 'lucide-react'
 import { api } from '../api/client'
@@ -377,13 +378,13 @@ function Arrivages() {
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      {!arrivage.isValidated && (
+                      {(!arrivage.isValidated || isSuperAdmin()) && (
                         <button type="button" onClick={() => handleEdit(arrivage)}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-beige-300 text-beige-700 text-xs hover:bg-white transition-colors">
                           <Pencil size={13} /> Modifier
                         </button>
                       )}
-                      {!arrivage.isValidated && (
+                      {(!arrivage.isValidated || isSuperAdmin()) && (
                         <button type="button" onClick={() => setConfirmDelete(arrivage.id)}
                           disabled={deleteMutation.isPending}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-xs transition-colors disabled:opacity-50">
